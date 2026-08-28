@@ -145,7 +145,11 @@ This is a curated source snapshot of the isolated preprocessor. Contract `0.8`
 remains an explicit compatibility boundary; downstream consumers must reject
 unknown contract versions.
 
-No open-source license has been selected yet. Until a `LICENSE` file is added,
-the source is visible for evaluation but no permission to use, modify, or
-redistribute it is granted. See [PUBLICATION_CHECKLIST.md](PUBLICATION_CHECKLIST.md).
+## License
 
+Java source code and build configuration are licensed under the
+[Apache License 2.0](LICENSE). Markdown documentation and bundled route-color
+CSV data are licensed under
+[Creative Commons Attribution 4.0 International](LICENSES/CC-BY-4.0.md).
+Third-party attribution is listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

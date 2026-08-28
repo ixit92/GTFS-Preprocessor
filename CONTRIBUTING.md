@@ -17,7 +17,7 @@ must distinguish raw rules, candidate edges, and traversable footpaths.
 Do not commit real GTFS feeds, generated databases, production reports,
 credentials, private keys, or infrastructure-specific configuration.
 
-The contribution license cannot be finalized until the repository owner has
-selected the project license. Pull requests should therefore remain disabled
-or clearly marked as not accepted until that decision is recorded.
-
+Unless explicitly stated otherwise, intentionally submitted code contributions
+are accepted under Apache-2.0. Documentation and route-color data contributions
+are accepted under CC BY 4.0. Contributors must have the right to submit their
+work under the applicable license and must preserve third-party attribution.
