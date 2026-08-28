@@ -1,5 +1,7 @@
 # IXIT GTFS Preprocessor
 
+[![CI](https://github.com/ixit92/GTFS-Preprocessor/actions/workflows/ci.yml/badge.svg)](https://github.com/ixit92/GTFS-Preprocessor/actions/workflows/ci.yml)
+
 IXIT GTFS Preprocessor is a standalone Java 21 CLI that converts a static
 GTFS ZIP into a validated, search- and routing-prepared SQLite database. It is
 an offline data preparation tool. It does not contain a journey planner, an

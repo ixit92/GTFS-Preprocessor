@@ -11,8 +11,8 @@ operational checks before publishing the first binary release:
 - [x] Preserve VBB and RNV attribution and CC BY 4.0 notices.
 - [x] Verify and document runtime dependency licenses for the exact versions in
       `pom.xml`.
-- [ ] Run `mvn clean package` from a fresh clone on Linux; the fresh Windows
-      clone is PASS and GitHub Actions performs the Linux check after push.
+- [x] Run `mvn clean package` from fresh Windows and Linux clones. GitHub
+      Actions run `33164983915` completed successfully.
 - [x] Scan the exported working tree and its single new commit for credential
       and private-infrastructure patterns.
 - [x] Confirm that no GTFS ZIP, SQLite file, report, key, or server path is
