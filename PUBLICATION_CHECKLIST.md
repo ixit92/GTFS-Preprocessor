@@ -18,7 +18,7 @@ operational checks before publishing the first binary release:
 - [x] Confirm that no GTFS ZIP, SQLite file, report, key, or server path is
       present.
 - [x] Create the GitHub repository without importing the private repository.
-- [ ] Enable secret scanning, push protection, Dependabot, and CodeQL.
+- [x] Enable secret scanning, push protection, Dependabot, and CodeQL.
 - [x] Add a private vulnerability-reporting contact to `SECURITY.md`.
 - [ ] Publish a `v0.9.7` source/JAR release with a SHA-256 checksum.
 

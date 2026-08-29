@@ -18,6 +18,8 @@ the source snapshot:
 - CI validates the release JAR and both SBOM files.
 - CodeQL scans Java changes and the default branch weekly.
 - Dependabot monitors Maven and GitHub Actions dependencies.
+- Jackson is updated to `2.22.2`; the release gate requires no open
+  Dependabot vulnerability alert for its runtime dependency set.
 - Tag publication rebuilds and tests from source and rejects a tag that does
   not exactly match the Maven project version.
 - The top-level `--help` command returns success for shell-friendly discovery.
