@@ -27,7 +27,7 @@ Android integration, GTFS Realtime processing, or network access at runtime.
 
 The current producer metadata is:
 
-- preprocessor version: `0.9.7`
+- preprocessor version: `0.9.8`
 - schema version: `0.1`
 - contract version: `0.8`
 - Java version: `21`
@@ -37,19 +37,19 @@ The current producer metadata is:
 Requirements:
 
 - JDK 21
-- Maven 3.9 or newer
+- no system Maven installation is required; the wrapper uses Maven `3.9.16`
 
 ```bash
-mvn clean package
+./mvnw clean package
 ```
 
 The build runs the embedded `PreprocessorSelfTest` suite through JUnit and
 creates a shaded CLI JAR plus CycloneDX 1.6 SBOMs at:
 
 ```text
-target/gtfs-preprocessor-0.9.7.jar
-target/gtfs-preprocessor-0.9.7-sbom.json
-target/gtfs-preprocessor-0.9.7-sbom.xml
+target/gtfs-preprocessor-0.9.8.jar
+target/gtfs-preprocessor-0.9.8-sbom.json
+target/gtfs-preprocessor-0.9.8-sbom.xml
 ```
 
 ## Quick Start
@@ -57,7 +57,7 @@ target/gtfs-preprocessor-0.9.7-sbom.xml
 Place the GTFS ZIP in the gitignored `local-data/` directory, then run:
 
 ```bash
-java -jar target/gtfs-preprocessor-0.9.7.jar \
+java -jar target/gtfs-preprocessor-0.9.8.jar \
   --input local-data/feed.zip \
   --output build/ixit_gtfs.sqlite \
   --report-output build/ixit_gtfs_contract_report.json
@@ -69,7 +69,7 @@ directory. The default output is `build/ixit_gtfs.sqlite`.
 For the complete derived schema used by a data consumer:
 
 ```bash
-java -Xmx3g -jar target/gtfs-preprocessor-0.9.7.jar \
+java -Xmx3g -jar target/gtfs-preprocessor-0.9.8.jar \
   --input local-data/feed.zip \
   --output build/runtime.sqlite \
   --report-output build/runtime-report.json \
@@ -132,6 +132,18 @@ Release tags must exactly match the Maven version. The release workflow rebuilds
 and tests the project from the tagged source before publishing any artifact.
 The JAR carries the project license, notice, CC BY 4.0 text, and third-party
 attribution under `META-INF/`.
+
+Release builds must also reproduce the JAR and both SBOMs byte-for-byte. GitHub
+build-provenance attestations cover every published asset and can be checked
+with:
+
+```bash
+gh attestation verify gtfs-preprocessor-0.9.8.jar \
+  --repo ixit92/GTFS-Preprocessor
+```
+
+See [docs/REPRODUCIBLE_BUILDS.md](docs/REPRODUCIBLE_BUILDS.md) for the pinned
+toolchain and local verification procedure.
 
 ## Data Contract
 

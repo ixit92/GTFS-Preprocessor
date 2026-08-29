@@ -74,7 +74,7 @@ public final class GtfsFeedFusionCli {
         static String usage() {
             return """
                     Usage:
-                      java -jar target/gtfs-preprocessor-0.9.7.jar fuse \
+                      java -jar target/gtfs-preprocessor-0.9.8.jar fuse \
                         --source DE_FULL=path/to/de.zip \
                         --source CH=path/to/ch.zip \
                         --output build/de-ch-fused.zip \

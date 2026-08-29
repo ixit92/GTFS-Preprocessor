@@ -133,18 +133,18 @@ public final class GtfsPreprocessorCli {
         static String usage() {
             return """
                     Usage:
-                      mvn exec:java -Dexec.args="--input path/to/gtfs.zip --output build/ixit_gtfs.sqlite"
-                      java -jar target/gtfs-preprocessor-0.9.7.jar --input path/to/gtfs.zip --output build/ixit_gtfs.sqlite --report-output build/ixit_gtfs_contract_report.json --app-runtime
-                      java -jar target/gtfs-preprocessor-0.9.7.jar fuse --source DE_FULL=de.zip --source CH=ch.zip --output build/de-ch-fused.zip
-                      java -jar target/gtfs-preprocessor-0.9.7.jar service-day --database build/ixit_gtfs.sqlite --service-id SERVICE_ID --date YYYY-MM-DD
-                      java -jar target/gtfs-preprocessor-0.9.7.jar service-day-audit --database build/v0.7.sqlite --baseline-database build/v0.6.4.sqlite --preprocess-report build/v0.7-report.json --output build/v0.8-audit.json --input-provenance copied-cache --source DE_FULL=SHA256 --spotcheck-date YYYY-MM-DD
-                      java -jar target/gtfs-preprocessor-0.9.7.jar cleanup-audit --tool-root . --audit-root build/v0.7.4 [--execute] [--delete-input-copies]
-                      java -jar target/gtfs-preprocessor-0.9.7.jar soak-compare --baseline-contract-report baseline.json --candidate-contract-report candidate.json --candidate-audit-report audit.json --output comparison.json --cycle-id cycle-01 --max-used-heap-mb 2300
-                      java -jar target/gtfs-preprocessor-0.9.7.jar feed-drift-audit --baseline-contract-report baseline.json --candidate-contract-report candidate.json --candidate-audit-report audit.json --output drift.json --baseline-source DE_FULL=SHA256 --candidate-source DE_FULL=SHA256
-                      java -jar target/gtfs-preprocessor-0.9.7.jar routing-contract-poc --database build/ixit_gtfs.sqlite --date YYYY-MM-DD --start-area AREA_ID --target-area AREA_ID --from 24:00:00 --to 27:00:00
-                      java -jar target/gtfs-preprocessor-0.9.7.jar routing-contract-real-feed-audit --tool-root . --database build/ixit_gtfs.sqlite --scenarios build/v0.8.1/scenarios.json --output build/v0.8.1/audit.json --input-provenance copied-cache --source DE_FULL=SHA256 --required-city Dortmund
-                      java -jar target/gtfs-preprocessor-0.9.7.jar mobile-package --tool-root . --database build/ixit_gtfs.sqlite --output-dir build/mobile/dortmund --seed-area AREA_ID --artifact-id de-dortmund-v2 --private-key local-data/mobile-signing-private.pem --public-key local-data/mobile-signing-public.pem --profile searchable-v2
-                      java -jar target/gtfs-preprocessor-0.9.7.jar mobile-update-contract --tool-root . --package-dir build/mobile/dortmund --output-dir build/mobile/dortmund-update --download-base-url https://updates.example.invalid/dortmund/ --sequence 1 --expires-at 2026-09-01T00:00:00Z --private-key local-data/mobile-signing-private.pem --public-key local-data/mobile-signing-public.pem
+                      ./mvnw exec:java -Dexec.args="--input path/to/gtfs.zip --output build/ixit_gtfs.sqlite"
+                      java -jar target/gtfs-preprocessor-0.9.8.jar --input path/to/gtfs.zip --output build/ixit_gtfs.sqlite --report-output build/ixit_gtfs_contract_report.json --app-runtime
+                      java -jar target/gtfs-preprocessor-0.9.8.jar fuse --source DE_FULL=de.zip --source CH=ch.zip --output build/de-ch-fused.zip
+                      java -jar target/gtfs-preprocessor-0.9.8.jar service-day --database build/ixit_gtfs.sqlite --service-id SERVICE_ID --date YYYY-MM-DD
+                      java -jar target/gtfs-preprocessor-0.9.8.jar service-day-audit --database build/v0.7.sqlite --baseline-database build/v0.6.4.sqlite --preprocess-report build/v0.7-report.json --output build/v0.8-audit.json --input-provenance copied-cache --source DE_FULL=SHA256 --spotcheck-date YYYY-MM-DD
+                      java -jar target/gtfs-preprocessor-0.9.8.jar cleanup-audit --tool-root . --audit-root build/v0.7.4 [--execute] [--delete-input-copies]
+                      java -jar target/gtfs-preprocessor-0.9.8.jar soak-compare --baseline-contract-report baseline.json --candidate-contract-report candidate.json --candidate-audit-report audit.json --output comparison.json --cycle-id cycle-01 --max-used-heap-mb 2300
+                      java -jar target/gtfs-preprocessor-0.9.8.jar feed-drift-audit --baseline-contract-report baseline.json --candidate-contract-report candidate.json --candidate-audit-report audit.json --output drift.json --baseline-source DE_FULL=SHA256 --candidate-source DE_FULL=SHA256
+                      java -jar target/gtfs-preprocessor-0.9.8.jar routing-contract-poc --database build/ixit_gtfs.sqlite --date YYYY-MM-DD --start-area AREA_ID --target-area AREA_ID --from 24:00:00 --to 27:00:00
+                      java -jar target/gtfs-preprocessor-0.9.8.jar routing-contract-real-feed-audit --tool-root . --database build/ixit_gtfs.sqlite --scenarios build/v0.8.1/scenarios.json --output build/v0.8.1/audit.json --input-provenance copied-cache --source DE_FULL=SHA256 --required-city Dortmund
+                      java -jar target/gtfs-preprocessor-0.9.8.jar mobile-package --tool-root . --database build/ixit_gtfs.sqlite --output-dir build/mobile/dortmund --seed-area AREA_ID --artifact-id de-dortmund-v2 --private-key local-data/mobile-signing-private.pem --public-key local-data/mobile-signing-public.pem --profile searchable-v2
+                      java -jar target/gtfs-preprocessor-0.9.8.jar mobile-update-contract --tool-root . --package-dir build/mobile/dortmund --output-dir build/mobile/dortmund-update --download-base-url https://updates.example.invalid/dortmund/ --sequence 1 --expires-at 2026-09-01T00:00:00Z --private-key local-data/mobile-signing-private.pem --public-key local-data/mobile-signing-public.pem
 
                     Options:
                       -i, --input              Required GTFS ZIP file

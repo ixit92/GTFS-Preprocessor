@@ -5,7 +5,7 @@
 
     <groupId>de.ixit</groupId>
     <artifactId>gtfs-preprocessor</artifactId>
-    <version>0.9.7</version>
+    <version>0.9.8</version>
     <name>IXIT GTFS Preprocessor</name>
     <description>Offline GTFS-to-SQLite preprocessor with an explicit IXIT data contract.</description>
     <url>https://github.com/ixit92/GTFS-Preprocessor</url>
@@ -20,7 +20,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.build.outputTimestamp>2026-08-23T00:00:00Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-08-29T00:00:00Z</project.build.outputTimestamp>
         <sqlite-jdbc.version>3.46.1.0</sqlite-jdbc.version>
         <jackson.version>2.22.2</jackson.version>
         <jts.version>1.20.0</jts.version>
@@ -67,7 +67,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
-                <version>3.3.1</version>
+                <version>3.5.0</version>
                 <executions>
                     <execution>
                         <id>copy-release-notices</id>
@@ -96,7 +96,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
+                <version>3.15.0</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -113,7 +113,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
-                <version>3.3.0</version>
+                <version>3.6.3</version>
                 <configuration>
                     <mainClass>de.ixit.gtfs.GtfsPreprocessorCli</mainClass>
                 </configuration>
@@ -121,7 +121,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.5.4</version>
+                <version>3.5.6</version>
                 <configuration>
                     <failIfNoTests>true</failIfNoTests>
                 </configuration>
@@ -154,7 +154,7 @@
                                         <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
                                         <Implementation-Title>${project.name}</Implementation-Title>
                                         <Implementation-Version>${project.version}</Implementation-Version>
-                                        <IXIT-Preprocessor-Version>0.9.7</IXIT-Preprocessor-Version>
+                                        <IXIT-Preprocessor-Version>0.9.8</IXIT-Preprocessor-Version>
                                         <IXIT-Schema-Version>0.1</IXIT-Schema-Version>
                                         <IXIT-Contract-Version>0.8</IXIT-Contract-Version>
                                     </manifestEntries>

@@ -8,7 +8,7 @@ Contract version: `0.8`
 
 Schema version: `0.1`
 
-Preprocessor version: `0.9.7`
+Preprocessor version: `0.9.8`
 
 ## Purpose
 
@@ -87,7 +87,7 @@ Columns:
 Required keys:
 
 - `schema_version = 0.1`
-- `preprocessor_version = 0.9.7`
+- `preprocessor_version = 0.9.8`
 - `generated_at`
 - `contract_name = IXIT_GTFS_SQLITE_CONTRACT`
 - `contract_version = 0.8`

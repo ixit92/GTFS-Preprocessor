@@ -5,7 +5,7 @@ import java.util.Map;
 
 public final class SqliteContract {
     public static final String SCHEMA_VERSION = "0.1";
-    public static final String PREPROCESSOR_VERSION = "0.9.7";
+    public static final String PREPROCESSOR_VERSION = "0.9.8";
     public static final String CONTRACT_NAME = "IXIT_GTFS_SQLITE_CONTRACT";
     public static final String LEGACY_CONTRACT_VERSION = "0.5";
     public static final String COMPATIBILITY_CONTRACT_VERSION = "0.6";

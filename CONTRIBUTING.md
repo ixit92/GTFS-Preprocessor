@@ -6,7 +6,7 @@ GTFS identity model.
 Before opening a change:
 
 ```bash
-mvn clean package
+./mvnw clean package
 ```
 
 Please include a network-free self-test for behavioral changes. In particular,

@@ -464,8 +464,8 @@ public final class SqliteStopSearchPoc {
             return """
                     Usage:
                       mvn -q package
-                      java --enable-native-access=ALL-UNNAMED -cp target/gtfs-preprocessor-0.9.7.jar de.ixit.gtfs.SqliteStopSearchPoc --db build/gtfs-de-full-core-v0_6.sqlite --query "Dortmund Hbf" --top 5
-                      java --enable-native-access=ALL-UNNAMED -cp target/gtfs-preprocessor-0.9.7.jar de.ixit.gtfs.SqliteStopSearchPoc --db build/gtfs-de-full-core-v0_6.sqlite --benchmark --schema --top 5
+                      java --enable-native-access=ALL-UNNAMED -cp target/gtfs-preprocessor-0.9.8.jar de.ixit.gtfs.SqliteStopSearchPoc --db build/gtfs-de-full-core-v0_6.sqlite --query "Dortmund Hbf" --top 5
+                      java --enable-native-access=ALL-UNNAMED -cp target/gtfs-preprocessor-0.9.8.jar de.ixit.gtfs.SqliteStopSearchPoc --db build/gtfs-de-full-core-v0_6.sqlite --benchmark --schema --top 5
                     """;
         }
     }

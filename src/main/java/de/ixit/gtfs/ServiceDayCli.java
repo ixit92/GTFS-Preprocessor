@@ -100,7 +100,7 @@ public final class ServiceDayCli {
     private static void printUsage() {
         System.err.println("""
                 Usage:
-                  java -jar target/gtfs-preprocessor-0.9.7.jar service-day --database build/ixit_gtfs.sqlite --service-id SERVICE_ID --date YYYY-MM-DD
+                  java -jar target/gtfs-preprocessor-0.9.8.jar service-day --database build/ixit_gtfs.sqlite --service-id SERVICE_ID --date YYYY-MM-DD
                 """);
     }
 }

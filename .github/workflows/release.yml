@@ -7,30 +7,38 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+
+env:
+  JAVA_VERSION: "21.0.12.1+1"
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Java 21
-        uses: actions/setup-java@v6
+      - name: Set up pinned Java 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: ${{ env.JAVA_VERSION }}
           cache: maven
 
       - name: Verify tag matches Maven version
         shell: bash
         run: |
-          project_version="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
+          project_version="$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)"
           test "$GITHUB_REF_NAME" = "v${project_version}"
           echo "PROJECT_VERSION=${project_version}" >> "$GITHUB_ENV"
 
       - name: Build release artifacts
-        run: mvn --batch-mode --no-transfer-progress clean package
+        run: ./mvnw --batch-mode --no-transfer-progress clean package
+
+      - name: Verify reproducible package
+        run: ./scripts/verify-reproducible-build.sh
 
       - name: Prepare checksums
         shell: bash
@@ -40,6 +48,11 @@ jobs:
           cp "target/gtfs-preprocessor-${PROJECT_VERSION}-sbom.json" dist/
           cp "target/gtfs-preprocessor-${PROJECT_VERSION}-sbom.xml" dist/
           (cd dist && sha256sum *.jar *.json *.xml > SHA256SUMS)
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
 
       - name: Publish GitHub release
         env:

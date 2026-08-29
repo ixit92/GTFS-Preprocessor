@@ -142,7 +142,7 @@ Am 2026-08-23 wurde `mvn package` mit Java 21 erfolgreich ausgefuehrt:
 - `PreprocessorSelfTest passed`
 - FULL, CORE_ONLY und APP_RUNTIME durchlaufen
 - Contract- und TransferFootpath-Audit PASS
-- JAR: `target/gtfs-preprocessor-0.9.7.jar`
+- JAR: `target/gtfs-preprocessor-0.9.8.jar`
 
 Der abschliessende Serverabgleich erfolgte mit SQLite `mode=ro&immutable=1`.
 Er bestaetigte Contract `0.7`, Preprocessor `0.9.5`, die oben dokumentierten
