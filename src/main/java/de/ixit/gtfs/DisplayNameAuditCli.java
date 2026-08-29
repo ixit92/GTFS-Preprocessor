@@ -76,7 +76,7 @@ public final class DisplayNameAuditCli {
         private static void printUsage() {
             System.out.println("""
                     Usage:
-                      java -cp target/gtfs-preprocessor-0.9.7-SNAPSHOT.jar de.ixit.gtfs.DisplayNameAuditCli --database path/to/runtime.sqlite [--require-pass]
+                      java -cp target/gtfs-preprocessor-0.9.7.jar de.ixit.gtfs.DisplayNameAuditCli --database path/to/runtime.sqlite [--require-pass]
                     """);
         }
     }

@@ -91,7 +91,7 @@ public final class DisplayNameQualityBaselineCli {
         private static void printUsage() {
             System.out.println("""
                     Usage:
-                      java -cp target/gtfs-preprocessor-0.9.7-SNAPSHOT.jar de.ixit.gtfs.DisplayNameQualityBaselineCli --database path/to/runtime.sqlite [--output report.json]
+                      java -cp target/gtfs-preprocessor-0.9.7.jar de.ixit.gtfs.DisplayNameQualityBaselineCli --database path/to/runtime.sqlite [--output report.json]
                     """);
         }
     }

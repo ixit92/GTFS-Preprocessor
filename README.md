@@ -1,6 +1,7 @@
 # IXIT GTFS Preprocessor
 
 [![CI](https://github.com/ixit92/GTFS-Preprocessor/actions/workflows/ci.yml/badge.svg)](https://github.com/ixit92/GTFS-Preprocessor/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/ixit92/GTFS-Preprocessor/actions/workflows/codeql.yml/badge.svg)](https://github.com/ixit92/GTFS-Preprocessor/actions/workflows/codeql.yml)
 
 IXIT GTFS Preprocessor is a standalone Java 21 CLI that converts a static
 GTFS ZIP into a validated, search- and routing-prepared SQLite database. It is
@@ -42,11 +43,13 @@ Requirements:
 mvn clean package
 ```
 
-The build runs the embedded `PreprocessorSelfTest` suite and creates a shaded
-CLI JAR at:
+The build runs the embedded `PreprocessorSelfTest` suite through JUnit and
+creates a shaded CLI JAR plus CycloneDX 1.6 SBOMs at:
 
 ```text
-target/gtfs-preprocessor-0.9.7-SNAPSHOT.jar
+target/gtfs-preprocessor-0.9.7.jar
+target/gtfs-preprocessor-0.9.7-sbom.json
+target/gtfs-preprocessor-0.9.7-sbom.xml
 ```
 
 ## Quick Start
@@ -54,7 +57,7 @@ target/gtfs-preprocessor-0.9.7-SNAPSHOT.jar
 Place the GTFS ZIP in the gitignored `local-data/` directory, then run:
 
 ```bash
-java -jar target/gtfs-preprocessor-0.9.7-SNAPSHOT.jar \
+java -jar target/gtfs-preprocessor-0.9.7.jar \
   --input local-data/feed.zip \
   --output build/ixit_gtfs.sqlite \
   --report-output build/ixit_gtfs_contract_report.json
@@ -66,7 +69,7 @@ directory. The default output is `build/ixit_gtfs.sqlite`.
 For the complete derived schema used by a data consumer:
 
 ```bash
-java -Xmx3g -jar target/gtfs-preprocessor-0.9.7-SNAPSHOT.jar \
+java -Xmx3g -jar target/gtfs-preprocessor-0.9.7.jar \
   --input local-data/feed.zip \
   --output build/runtime.sqlite \
   --report-output build/runtime-report.json \
@@ -115,6 +118,20 @@ The shaded JAR also exposes:
   packages without embedding private keys.
 
 Run the JAR with `--help` to print the complete command synopsis.
+
+## Release Verification
+
+GitHub releases contain the shaded JAR, CycloneDX JSON and XML SBOMs, and a
+`SHA256SUMS` file. Verify downloaded artifacts on Linux with:
+
+```bash
+sha256sum --check SHA256SUMS
+```
+
+Release tags must exactly match the Maven version. The release workflow rebuilds
+and tests the project from the tagged source before publishing any artifact.
+The JAR carries the project license, notice, CC BY 4.0 text, and third-party
+attribution under `META-INF/`.
 
 ## Data Contract
 

@@ -118,7 +118,7 @@ public final class ServiceDayRealFeedAuditCli {
     private static void printUsage() {
         System.err.println("""
                 Usage:
-                  java -jar target/gtfs-preprocessor-0.9.7-SNAPSHOT.jar service-day-audit \
+                  java -jar target/gtfs-preprocessor-0.9.7.jar service-day-audit \
                     --database build/v0.7.sqlite \
                     --baseline-database build/v0.6.4.sqlite \
                     --preprocess-report build/v0.7-contract-report.json \

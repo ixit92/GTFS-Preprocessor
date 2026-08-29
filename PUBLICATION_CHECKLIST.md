@@ -19,7 +19,7 @@ operational checks before publishing the first binary release:
       present.
 - [x] Create the GitHub repository without importing the private repository.
 - [ ] Enable secret scanning, push protection, Dependabot, and CodeQL.
-- [ ] Add a private vulnerability-reporting contact to `SECURITY.md`.
+- [x] Add a private vulnerability-reporting contact to `SECURITY.md`.
 - [ ] Publish a `v0.9.7` source/JAR release with a SHA-256 checksum.
 
 The project license split is documented in `README.md`, `LICENSE`,

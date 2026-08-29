@@ -63,7 +63,7 @@ agency metadata.
 ## Diagnostic command
 
 ```bash
-java -jar target/gtfs-preprocessor-0.7.0-SNAPSHOT.jar service-day \
+java -jar target/gtfs-preprocessor-0.9.7.jar service-day \
   --database build/ixit_gtfs.sqlite \
   --service-id SERVICE_ID \
   --date 2026-01-02
