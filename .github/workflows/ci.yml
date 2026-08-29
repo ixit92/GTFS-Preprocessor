@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  JAVA_VERSION: "21.0.12.1+1"
+  JAVA_VERSION: "21.0.12.1"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}

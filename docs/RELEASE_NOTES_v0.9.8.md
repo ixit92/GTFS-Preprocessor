@@ -7,7 +7,7 @@ The SQLite schema remains `0.1` and the producer/consumer contract remains
 ## Build And Supply Chain
 
 - Maven `3.9.16` is pinned through an SHA-256-verified Maven Wrapper.
-- CI and release jobs use pinned Temurin `21.0.12.1+1`.
+- CI and release jobs use pinned Temurin `21.0.12.1` (Temurin build 1).
 - Every GitHub Action is pinned to a complete commit SHA.
 - The JAR and both CycloneDX SBOMs must reproduce byte-for-byte in a second
   clean build before release publication.

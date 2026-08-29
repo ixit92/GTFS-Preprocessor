@@ -11,7 +11,7 @@ permissions:
   attestations: write
 
 env:
-  JAVA_VERSION: "21.0.12.1+1"
+  JAVA_VERSION: "21.0.12.1"
 
 jobs:
   release:

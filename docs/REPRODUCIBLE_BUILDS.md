@@ -5,7 +5,7 @@ environment:
 
 - Maven `3.9.16` is supplied by the checked-in Maven Wrapper;
 - the Maven distribution is verified with SHA-256 before use;
-- CI and release workflows use Temurin `21.0.12.1+1`;
+- CI and release workflows use Temurin `21.0.12.1` (Temurin build 1);
 - GitHub Actions are pinned to complete commit SHAs;
 - text inputs use repository-defined line endings;
 - JAR timestamps use `project.build.outputTimestamp`;
