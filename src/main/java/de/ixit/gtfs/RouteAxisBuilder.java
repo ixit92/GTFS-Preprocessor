@@ -42,28 +42,47 @@ public final class RouteAxisBuilder {
     }
 
     public RouteAxisBuildResult buildFromDatabase(Path databasePath) throws SQLException {
+        List<RouteAxis> axes = new ArrayList<>();
+        List<RouteAxisStop> axisStops = new ArrayList<>();
+        RouteAxisStats stats = streamFromDatabase(databasePath, (axis, sequence) -> {
+            axes.add(axis);
+            for (int index = 0; index < sequence.size(); index++) {
+                axisStops.add(new RouteAxisStop(axis.axisId(), index, sequence.get(index)));
+            }
+        }, null);
+        return new RouteAxisBuildResult(List.copyOf(axes), List.copyOf(axisStops), stats);
+    }
+
+    @FunctionalInterface
+    public interface AxisConsumer {
+        void accept(RouteAxis axis, List<String> sequence) throws SQLException;
+    }
+
+    public RouteAxisStats streamFromDatabase(Path databasePath, AxisConsumer consumer,
+                                             GtfsCsvReader.ProgressListener progress) throws SQLException {
         Map<AxisKey, AxisAccumulator> accumulators = new LinkedHashMap<>();
         Set<String> routesWithoutUsableSequence = new LinkedHashSet<>();
         Counter tripsWithoutUsableSequence = new Counter();
         Counter unmappedStopTimeCount = new Counter();
         Set<String> unmappedStopSamples = new LinkedHashSet<>();
 
-        streamTripSequences(databasePath, accumulators, routesWithoutUsableSequence, tripsWithoutUsableSequence, unmappedStopTimeCount, unmappedStopSamples);
+        streamTripSequences(databasePath, accumulators, routesWithoutUsableSequence, tripsWithoutUsableSequence, unmappedStopTimeCount, unmappedStopSamples, progress);
         int tripsWithoutStopTimes = tripsWithoutStopTimes(databasePath, routesWithoutUsableSequence);
 
         List<RouteAxis> axes = new ArrayList<>();
-        List<RouteAxisStop> axisStops = new ArrayList<>();
         List<AxisAccumulator> sortedAccumulators = new ArrayList<>(accumulators.values());
+        accumulators.clear();
         sortedAccumulators.sort(Comparator.comparing((AxisAccumulator accumulator) -> accumulator.key.routeId())
                 .thenComparing(accumulator -> nullSafe(accumulator.key.directionId()))
                 .thenComparing(AxisAccumulator::representativeTripId));
 
         int ordinal = 1;
+        int axisStopCount = 0;
         for (AxisAccumulator accumulator : sortedAccumulators) {
             Route route = routesById.get(accumulator.key.routeId());
             String axisId = axisId(accumulator.key, ordinal++);
             List<String> sequence = accumulator.key.sequence();
-            axes.add(new RouteAxis(
+            RouteAxis axis = new RouteAxis(
                     axisId,
                     accumulator.key.routeId(),
                     accumulator.key.directionId(),
@@ -76,22 +95,21 @@ public final class RouteAxisBuilder {
                     route == null ? null : route.routeLongName(),
                     route == null ? null : route.routeType(),
                     "exact_sequence_group; trips=" + accumulator.tripCount + "; stop_areas=" + sequence.size()
-            ));
-            for (int index = 0; index < sequence.size(); index++) {
-                axisStops.add(new RouteAxisStop(axisId, index, sequence.get(index)));
-            }
+            );
+            axes.add(axis);
+            consumer.accept(axis, sequence);
+            axisStopCount = Math.addExact(axisStopCount, sequence.size());
         }
 
-        RouteAxisStats stats = RouteAxisStats.from(
+        return RouteAxisStats.from(
                 axes,
-                axisStops,
+                axisStopCount,
                 routesWithoutUsableSequence,
                 tripsWithoutStopTimes,
                 tripsWithoutUsableSequence.value,
                 unmappedStopTimeCount.value,
                 unmappedStopSamples
         );
-        return new RouteAxisBuildResult(List.copyOf(axes), List.copyOf(axisStops), stats);
     }
 
     private static void streamTripSequences(
@@ -100,8 +118,12 @@ public final class RouteAxisBuilder {
             Set<String> routesWithoutUsableSequence,
             Counter tripsWithoutUsableSequence,
             Counter unmappedStopTimeCount,
-            Set<String> unmappedStopSamples
+            Set<String> unmappedStopSamples,
+            GtfsCsvReader.ProgressListener progress
     ) throws SQLException {
+        // Share retained identifiers across exact sequences; never use the global intern pool.
+        Map<String, String> areaIds = new HashMap<>();
+        Map<String, String> routeIds = new HashMap<>();
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + databasePath.toAbsolutePath());
              Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery("""
@@ -116,13 +138,15 @@ public final class RouteAxisBuilder {
                      ORDER BY st.trip_id, st.stop_sequence
                      """)) {
             TripSequence current = null;
+            long rows = 0;
             while (resultSet.next()) {
+                if (progress != null) progress.onRowsRead(++rows);
                 String tripId = resultSet.getString("trip_id");
                 if (current == null || !current.tripId().equals(tripId)) {
                     finalizeTrip(current, accumulators, routesWithoutUsableSequence, tripsWithoutUsableSequence);
                     current = new TripSequence(
                             tripId,
-                            resultSet.getString("route_id"),
+                            routeIds.computeIfAbsent(resultSet.getString("route_id"), id -> id),
                             resultSet.getString("direction_id")
                     );
                 }
@@ -135,7 +159,7 @@ public final class RouteAxisBuilder {
                     }
                     continue;
                 }
-                current.addArea(areaId);
+                current.addArea(areaIds.computeIfAbsent(areaId, id -> id));
             }
             finalizeTrip(current, accumulators, routesWithoutUsableSequence, tripsWithoutUsableSequence);
         }
@@ -274,9 +298,16 @@ public final class RouteAxisBuilder {
             List<String> unmappedStopSamples,
             List<RouteAxis> shortAxes
     ) {
+        public static RouteAxisStats from(List<RouteAxis> axes, List<RouteAxisStop> axisStops,
+                Set<String> routesWithoutUsableSequence, int tripsWithoutStopTimes,
+                int tripsWithoutUsableSequence, int unmappedStopTimeCount, Set<String> unmappedStopSamples) {
+            return from(axes, axisStops.size(), routesWithoutUsableSequence, tripsWithoutStopTimes,
+                    tripsWithoutUsableSequence, unmappedStopTimeCount, unmappedStopSamples);
+        }
+
         public static RouteAxisStats from(
                 List<RouteAxis> axes,
-                List<RouteAxisStop> axisStops,
+                int axisStopCount,
                 Set<String> routesWithoutUsableSequence,
                 int tripsWithoutStopTimes,
                 int tripsWithoutUsableSequence,
@@ -297,7 +328,7 @@ public final class RouteAxisBuilder {
                     .toList();
             return new RouteAxisStats(
                     axes.size(),
-                    axisStops.size(),
+                    axisStopCount,
                     List.copyOf(topAxes),
                     Map.copyOf(axisCountsByRoute),
                     List.copyOf(routesWithoutUsableSequence),

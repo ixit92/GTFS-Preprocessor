@@ -12,8 +12,6 @@ import de.ixit.gtfs.model.FeedInfo;
 import de.ixit.gtfs.model.GtfsTransfer;
 import de.ixit.gtfs.model.HubProfile;
 import de.ixit.gtfs.model.Route;
-import de.ixit.gtfs.model.RouteAxis;
-import de.ixit.gtfs.model.RouteAxisStop;
 import de.ixit.gtfs.model.Stop;
 import de.ixit.gtfs.model.StopArea;
 import de.ixit.gtfs.model.StopAreaAlias;
@@ -621,6 +619,36 @@ public final class SqliteGtfsWriter implements AutoCloseable {
         }
     }
 
+    public StopSearchTokenBuilder.StreamingStats writeStopSearchTokens(
+            GtfsCsvReader.ProgressListener progress) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO stop_search_tokens(stop_id, area_id, token, token_type, source)
+                VALUES (?, ?, ?, ?, ?)
+                """)) {
+            begin();
+            int[] batched = new int[1];
+            var stats = StopSearchTokenBuilder.streamFromDatabase(databasePath, token -> {
+                statement.setString(1, token.stopId());
+                statement.setString(2, token.areaId());
+                statement.setString(3, token.token());
+                statement.setString(4, token.tokenType());
+                statement.setString(5, token.source());
+                statement.addBatch();
+                batched[0] = executeBatchIfNeeded(statement, batched[0]);
+            }, progress);
+            statement.executeBatch();
+            commit();
+            return stats;
+        } catch (SQLException | RuntimeException failure) {
+            try {
+                connection.rollback();
+            } catch (SQLException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
+            throw failure;
+        }
+    }
+
     public void writeStopSearchTokens(List<StopSearchToken> tokens) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 INSERT INTO stop_search_tokens(stop_id, area_id, token, token_type, source)
@@ -1090,7 +1118,9 @@ public final class SqliteGtfsWriter implements AutoCloseable {
         }
     }
 
-    public void writeRouteAxes(List<RouteAxis> axes, List<RouteAxisStop> axisStops) throws SQLException {
+    public RouteAxisBuilder.RouteAxisStats writeRouteAxes(RouteAxisBuilder builder,
+            GtfsCsvReader.ProgressListener readProgress,
+            GtfsCsvReader.ProgressListener writeProgress) throws SQLException {
         try (PreparedStatement axisStatement = connection.prepareStatement("""
                 INSERT INTO route_axes(
                     axis_id,
@@ -1113,8 +1143,9 @@ public final class SqliteGtfsWriter implements AutoCloseable {
                      VALUES (?, ?, ?)
                      """)) {
             begin();
-            int batchedAxes = 0;
-            for (RouteAxis axis : axes) {
+            int[] batched = new int[2];
+            long[] rows = new long[1];
+            RouteAxisBuilder.RouteAxisStats stats = builder.streamFromDatabase(databasePath, (axis, sequence) -> {
                 axisStatement.setString(1, axis.axisId());
                 axisStatement.setString(2, axis.routeId());
                 axisStatement.setString(3, axis.directionId());
@@ -1128,20 +1159,27 @@ public final class SqliteGtfsWriter implements AutoCloseable {
                 setInteger(axisStatement, 11, axis.routeType());
                 axisStatement.setString(12, axis.explanation());
                 axisStatement.addBatch();
-                batchedAxes = executeBatchIfNeeded(axisStatement, batchedAxes);
-            }
+                batched[0] = executeBatchIfNeeded(axisStatement, batched[0]);
+                for (int index = 0; index < sequence.size(); index++) {
+                    stopStatement.setString(1, axis.axisId());
+                    stopStatement.setInt(2, index);
+                    stopStatement.setString(3, sequence.get(index));
+                    stopStatement.addBatch();
+                    batched[1] = executeBatchIfNeeded(stopStatement, batched[1]);
+                    if (writeProgress != null) writeProgress.onRowsRead(++rows[0]);
+                }
+            }, readProgress);
             axisStatement.executeBatch();
-
-            int batchedStops = 0;
-            for (RouteAxisStop stop : axisStops) {
-                stopStatement.setString(1, stop.axisId());
-                stopStatement.setInt(2, stop.sequenceIndex());
-                stopStatement.setString(3, stop.areaId());
-                stopStatement.addBatch();
-                batchedStops = executeBatchIfNeeded(stopStatement, batchedStops);
-            }
             stopStatement.executeBatch();
             commit();
+            return stats;
+        } catch (SQLException | RuntimeException failure) {
+            try {
+                connection.rollback();
+            } catch (SQLException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
+            throw failure;
         }
     }
 
@@ -1279,7 +1317,32 @@ public final class SqliteGtfsWriter implements AutoCloseable {
         }
     }
 
+    public void writePathways(List<de.ixit.gtfs.model.Pathway> pathways) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO pathways(pathway_id, from_stop_id, to_stop_id, pathway_mode,
+                    is_bidirectional, length, traversal_time, stair_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """)) {
+            begin();
+            int batched = 0;
+            for (var path : pathways) {
+                statement.setString(1, path.pathwayId());
+                statement.setString(2, path.fromStopId());
+                statement.setString(3, path.toStopId());
+                setInteger(statement, 4, path.mode());
+                setInteger(statement, 5, path.bidirectional());
+                statement.setObject(6, path.lengthMeters());
+                setInteger(statement, 7, path.traversalSeconds());
+                setInteger(statement, 8, path.stairCount());
+                statement.addBatch();
+                batched = executeBatchIfNeeded(statement, batched);
+            }
+            statement.executeBatch();
+            commit();
+        }
+    }
+
     public StopFootpathBuilder.StopFootpathStats writeStopFootpaths(StopFootpathBuilder builder) throws SQLException {
+        com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
         try (PreparedStatement statement = connection.prepareStatement("""
                 INSERT INTO stop_footpaths(
                     footpath_id,
@@ -1293,9 +1356,14 @@ public final class SqliteGtfsWriter implements AutoCloseable {
                     distance_model,
                     time_model,
                     source,
-                    explanation
+                    explanation,
+                    walk_seconds,
+                    transfer_buffer_seconds,
+                    gtfs_min_transfer_seconds,
+                    pathway_ids,
+                    pathway_modes
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)) {
             begin();
             BatchCounter counter = new BatchCounter();
@@ -1314,6 +1382,15 @@ public final class SqliteGtfsWriter implements AutoCloseable {
                     statement.setString(10, footpath.timeModel());
                     statement.setString(11, footpath.source());
                     statement.setString(12, footpath.explanation());
+                    setInteger(statement, 13, footpath.walkSeconds());
+                    setInteger(statement, 14, footpath.transferBufferSeconds());
+                    setInteger(statement, 15, footpath.gtfsMinTransferSeconds());
+                    try {
+                        statement.setString(16, json.writeValueAsString(footpath.pathwayIds()));
+                    } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+                        throw new SQLException("Cannot serialize footpath provenance", ex);
+                    }
+                    statement.setInt(17, footpath.pathwayModes());
                     statement.addBatch();
                     counter.count = executeBatchIfNeeded(statement, counter.count);
                     transactionRows.count++;
@@ -1388,6 +1465,7 @@ public final class SqliteGtfsWriter implements AutoCloseable {
         metadata.put("service_day_time_overflow_policy", SqliteContract.SERVICE_DAY_TIME_OVERFLOW_POLICY);
         metadata.put("transfer_semantics_policy", SqliteContract.TRANSFER_SEMANTICS_POLICY);
         metadata.put("footpath_policy", SqliteContract.FOOTPATH_POLICY);
+        metadata.put("walk_model_version", SqliteContract.WALK_MODEL_VERSION);
         metadata.put("feed_timezones", readFeedTimezones());
         metadata.putAll(buildIdentity.metadata());
         metadata.put("source_format", "GTFS");
@@ -2042,9 +2120,27 @@ public final class SqliteGtfsWriter implements AutoCloseable {
                         time_model TEXT NOT NULL,
                         source TEXT NOT NULL,
                         explanation TEXT,
+                        walk_seconds INTEGER,
+                        transfer_buffer_seconds INTEGER,
+                        gtfs_min_transfer_seconds INTEGER,
+                        pathway_ids TEXT NOT NULL,
+                        pathway_modes INTEGER NOT NULL,
                         UNIQUE (area_id, from_stop_id, to_stop_id)
                     )
                     """);
+            statement.execute("""
+                    CREATE TABLE pathways (
+                        pathway_id TEXT PRIMARY KEY,
+                        from_stop_id TEXT NOT NULL,
+                        to_stop_id TEXT NOT NULL,
+                        pathway_mode INTEGER,
+                        is_bidirectional INTEGER,
+                        length REAL,
+                        traversal_time INTEGER,
+                        stair_count INTEGER
+                    )
+                    """);
+            statement.execute("CREATE INDEX idx_pathways_from_to ON pathways(from_stop_id, to_stop_id)");
             statement.execute("""
                     CREATE TABLE ixit_metadata (
                         key TEXT PRIMARY KEY,

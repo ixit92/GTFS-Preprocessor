@@ -51,6 +51,7 @@ public final class SqliteContractValidator {
                 requireMetadata(metadata, "service_day_time_overflow_policy", SqliteContract.SERVICE_DAY_TIME_OVERFLOW_POLICY, errors);
                 requireMetadata(metadata, "transfer_semantics_policy", SqliteContract.TRANSFER_SEMANTICS_POLICY, errors);
                 requireMetadata(metadata, "footpath_policy", SqliteContract.FOOTPATH_POLICY, errors);
+                requireMetadata(metadata, "walk_model_version", SqliteContract.WALK_MODEL_VERSION, errors);
                 requireMetadataPresent(metadata, "feed_timezones", errors);
                 requireMetadata(metadata, "build_identity_version", BuildIdentity.IDENTITY_VERSION, errors);
                 requireSha256Metadata(metadata, "build_identity_sha256", errors);
@@ -115,7 +116,9 @@ public final class SqliteContractValidator {
                             + ", traversable_area_membership=" + transferAudit.traversableAreaMembershipEdges()
                             + ", over_distance_footpaths=" + transferAudit.overDistanceTraversableFootpaths()
                             + ", zero_time_footpaths=" + transferAudit.zeroTimeTraversableFootpaths()
-                            + ", areas_without_footpaths=" + transferAudit.areasWithoutFootpathRows());
+                            + ", areas_without_footpaths=" + transferAudit.areasWithoutFootpathRows()
+                            + ", invalid_walk_components=" + transferAudit.invalidWalkComponents()
+                            + ", prohibited_walks=" + transferAudit.prohibitedWalks());
                 }
             }
 
@@ -253,7 +256,7 @@ public final class SqliteContractValidator {
         return HubProfileBuilder.HubProfileStats.from(profiles);
     }
 
-    private static RouteAxisBuilder.RouteAxisStats readRouteAxisStats(Connection connection, Set<String> tables) throws SQLException {
+    static RouteAxisBuilder.RouteAxisStats readRouteAxisStats(Connection connection, Set<String> tables) throws SQLException {
         if (!tables.contains("route_axes") || !tables.contains("route_axis_stops")) {
             return null;
         }
@@ -292,18 +295,8 @@ public final class SqliteContractValidator {
             }
         }
 
-        List<de.ixit.gtfs.model.RouteAxisStop> axisStops = new ArrayList<>();
-        try (Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery("SELECT axis_id, sequence_index, area_id FROM route_axis_stops")) {
-            while (resultSet.next()) {
-                axisStops.add(new de.ixit.gtfs.model.RouteAxisStop(
-                        resultSet.getString("axis_id"),
-                        resultSet.getInt("sequence_index"),
-                        resultSet.getString("area_id")
-                ));
-            }
-        }
-        return RouteAxisBuilder.RouteAxisStats.from(axes, axisStops, Set.of(), 0, 0, 0, Set.of());
+        return RouteAxisBuilder.RouteAxisStats.from(axes, readCount(connection, "route_axis_stops"),
+                Set.of(), 0, 0, 0, Set.of());
     }
 
     private static TransferRuleBuilder.TransferRuleStats readTransferRuleStats(Connection connection, Set<String> tables) throws SQLException {
@@ -411,7 +404,8 @@ public final class SqliteContractValidator {
     private static int readCount(Connection connection, String table) throws SQLException {
         try (Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + table)) {
-            return resultSet.getInt(1);
+            resultSet.next();
+            return Math.toIntExact(resultSet.getLong(1));
         }
     }
 

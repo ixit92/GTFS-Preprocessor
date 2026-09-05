@@ -2,6 +2,8 @@ package de.ixit.gtfs;
 
 import de.ixit.gtfs.model.Stop;
 import de.ixit.gtfs.model.StopFootpath;
+import de.ixit.gtfs.model.Pathway;
+import de.ixit.gtfs.model.TransferRule;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,14 +19,18 @@ public final class StopFootpathBuilder {
     public static final String DISTANCE_MODEL = "STRAIGHT_LINE_LOWER_BOUND";
     public static final String TIME_MODEL = "detour_1.35_speed_1.2mps_plus_60s_min_120s";
     private static final double EARTH_RADIUS_METERS = 6_371_000.0;
-    private static final double DETOUR_FACTOR = 1.35;
-    private static final double WALKING_METERS_PER_SECOND = 1.2;
-    private static final int WAYFINDING_BUFFER_SECONDS = 60;
-    private static final int MINIMUM_TRANSFER_SECONDS = 120;
 
     private final Map<String, List<Stop>> boardingStopsByArea = new LinkedHashMap<>();
+    private final StationPathwayGraph pathways;
+    private final StopTransferConstraints constraints;
 
     public StopFootpathBuilder(List<Stop> stops) {
+        this(stops, List.of(), List.of());
+    }
+
+    public StopFootpathBuilder(List<Stop> stops, List<Pathway> paths, List<TransferRule> rules) {
+        pathways = new StationPathwayGraph(stops, paths);
+        constraints = new StopTransferConstraints(stops, rules);
         for (Stop stop : stops) {
             if (!isBoardingStop(stop)) {
                 continue;
@@ -47,34 +53,19 @@ public final class StopFootpathBuilder {
             boolean areaUnknown = false;
             int areaMaxDistance = 0;
             for (Stop from : members) {
+                StationPathwayGraph.Paths routes = pathways.covers(entry.getKey()) ? pathways.pathsFrom(from.stopId()) : null;
                 for (Stop to : members) {
                     if (from.stopId().equals(to.stopId())) {
                         continue;
                     }
                     sequence++;
                     Integer distance = distanceMeters(from, to);
-                    boolean traversable = distance != null && distance <= MAX_ESTIMATED_TRAVERSABLE_METERS;
-                    Integer seconds = distance == null ? null : estimatedSeconds(distance);
-                    String quality = quality(distance);
                     if (distance == null) {
                         areaUnknown = true;
                     } else {
                         areaMaxDistance = Math.max(areaMaxDistance, distance);
                     }
-                    StopFootpath footpath = new StopFootpath(
-                            "same_area_footpath_" + sequence,
-                            entry.getKey(),
-                            from.stopId(),
-                            to.stopId(),
-                            distance,
-                            seconds,
-                            traversable,
-                            quality,
-                            distance == null ? "UNKNOWN" : DISTANCE_MODEL,
-                            distance == null ? "UNKNOWN" : TIME_MODEL,
-                            "SAME_STOP_AREA_GEOMETRY",
-                            explanation(distance, traversable)
-                    );
+                    StopFootpath footpath = footpath(sequence, entry.getKey(), from, to, distance, routes);
                     consumer.accept(footpath);
                     stats.accept(footpath);
                 }
@@ -93,6 +84,39 @@ public final class StopFootpathBuilder {
         }
         boardingStopsByArea.clear();
         return stats.toStats();
+    }
+
+    public int unusablePathwayRows() {
+        return pathways.unusableRows();
+    }
+
+    private StopFootpath footpath(long sequence, String areaId, Stop from, Stop to, Integer distance,
+                                  StationPathwayGraph.Paths routes) {
+        StopTransferConstraints.Constraint constraint = constraints.between(from.stopId(), to.stopId());
+        StationPathwayGraph.Evidence evidence = routes == null ? null : routes.to(to.stopId());
+        boolean mapped = evidence != null;
+        boolean blockedByGraph = routes != null && !mapped;
+        Integer walkSeconds = null;
+        if (mapped) walkSeconds = evidence.walkSeconds();
+        else if (!blockedByGraph && distance != null) walkSeconds = WalkTimeModel.estimatedWalkSeconds(distance);
+        Integer seconds = walkSeconds == null ? null : WalkTimeModel.minimumTransferSeconds(walkSeconds, constraint.minimumSeconds());
+        boolean traversable = !constraint.blocked() && !blockedByGraph
+                && (mapped || distance != null && distance <= MAX_ESTIMATED_TRAVERSABLE_METERS);
+        String quality = constraint.blocked() ? "BLOCKED" : blockedByGraph ? "UNKNOWN"
+                : mapped ? evidence.estimated() ? "ESTIMATED" : "FEED_PROVIDED" : quality(distance);
+        return new StopFootpath("same_area_footpath_" + sequence, areaId, from.stopId(), to.stopId(),
+                mapped ? evidence.lengthMeters() : distance, seconds, traversable, quality,
+                mapped ? evidence.lengthMeters() == null ? "GTFS_PATHWAY_TIME_ONLY" : "GTFS_PATHWAY_LENGTH"
+                        : distance == null ? "UNKNOWN" : DISTANCE_MODEL,
+                mapped ? evidence.estimated() ? "PATHWAY_MODE_ESTIMATE_PLUS_BUFFER" : "PATHWAY_TRAVERSAL_TIME_PLUS_BUFFER"
+                        : blockedByGraph || distance == null ? "UNKNOWN" : TIME_MODEL,
+                routes == null ? "SAME_STOP_AREA_GEOMETRY" : "GTFS_PATHWAYS",
+                constraint.blocked() ? "Unscoped GTFS prohibition or invalid mandatory minimum blocks this generic transfer."
+                        : blockedByGraph ? "No usable directed path in the supplied station graph; geometry fallback is disabled."
+                        : mapped ? "Directed station walk; buffer applied once; GTFS minimum is a lower bound. Accessibility and scoped rules require consumer validation."
+                        : explanation(distance, traversable),
+                walkSeconds, walkSeconds == null ? null : WalkTimeModel.BUFFER_SECONDS,
+                constraint.minimumSeconds(), mapped ? evidence.pathwayIds() : List.of(), mapped ? evidence.modes() : 0);
     }
 
     private static boolean isBoardingStop(Stop stop) {
@@ -121,12 +145,6 @@ public final class StopFootpathBuilder {
                 && stop.stopLat() <= 90.0
                 && stop.stopLon() >= -180.0
                 && stop.stopLon() <= 180.0;
-    }
-
-    private static int estimatedSeconds(int distanceMeters) {
-        int estimate = (int) Math.ceil(distanceMeters * DETOUR_FACTOR / WALKING_METERS_PER_SECOND)
-                + WAYFINDING_BUFFER_SECONDS;
-        return Math.max(MINIMUM_TRANSFER_SECONDS, estimate);
     }
 
     private static String quality(Integer distanceMeters) {

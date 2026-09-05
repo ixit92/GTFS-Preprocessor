@@ -1,5 +1,8 @@
 # IXIT GTFS Preprocessor v0.9.7 - Transfer Semantics and Footpath Hardening
 
+Historical Contract 0.8 baseline. Current Contract 0.9 walk preparation is
+documented in [WALK_TRANSFERS.md](WALK_TRANSFERS.md).
+
 Stand: 2026-08-23
 
 Status: Real-Feed-Gate mit 3 GB und 2560 MB bestanden; Server-Aktivierung

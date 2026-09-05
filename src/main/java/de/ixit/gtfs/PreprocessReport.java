@@ -160,7 +160,7 @@ public record PreprocessReport(
         }
         if (stopFootpathStats != null) {
             text.append("StopFootpaths: ").append(stopFootpathStats.footpathCount()).append(System.lineSeparator());
-            text.append("StopFootpaths traversable estimates: ").append(stopFootpathStats.traversableCount()).append(System.lineSeparator());
+            text.append("StopFootpaths traversable: ").append(stopFootpathStats.traversableCount()).append(System.lineSeparator());
             text.append("StopFootpaths unknown/blocked: ").append(stopFootpathStats.unknownCount()).append(System.lineSeparator());
             text.append("StopFootpath quality: ").append(stopFootpathStats.qualityCounts()).append(System.lineSeparator());
             text.append("Oversized same-area groups (>400m): ").append(stopFootpathStats.oversizedAreas()).append(System.lineSeparator());
@@ -205,6 +205,11 @@ public record PreprocessReport(
             text.append("- stop_footpaths: ").append(transferFootpathAudit.stopFootpaths()).append(System.lineSeparator());
             text.append("- traversable_stop_footpaths: ").append(transferFootpathAudit.traversableStopFootpaths()).append(System.lineSeparator());
             text.append("- unknown_stop_footpaths: ").append(transferFootpathAudit.unknownStopFootpaths()).append(System.lineSeparator());
+            text.append("- raw_pathways: ").append(transferFootpathAudit.rawPathways()).append(System.lineSeparator());
+            text.append("- pathway_footpaths: ").append(transferFootpathAudit.pathwayFootpaths()).append(System.lineSeparator());
+            text.append("- geometry_estimates: ").append(transferFootpathAudit.estimatedFootpaths()).append(System.lineSeparator());
+            text.append("- invalid_walk_components: ").append(transferFootpathAudit.invalidWalkComponents()).append(System.lineSeparator());
+            text.append("- prohibited_walks: ").append(transferFootpathAudit.prohibitedWalks()).append(System.lineSeparator());
             text.append("- oversized_stop_areas: ").append(transferFootpathAudit.oversizedStopAreas()).append(System.lineSeparator());
             text.append("- extreme_stop_areas: ").append(transferFootpathAudit.extremeStopAreas()).append(System.lineSeparator());
             for (String sample : transferFootpathAudit.samples()) {

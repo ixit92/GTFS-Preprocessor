@@ -4,11 +4,11 @@ Status: aktive Schema-Referenz; konkrete Runtime-Metadaten haben Vorrang
 
 Contract name: `IXIT_GTFS_SQLITE_CONTRACT`
 
-Contract version: `0.8`
+Contract version: `0.9`
 
 Schema version: `0.1`
 
-Preprocessor version: `0.9.8`
+Preprocessor version: `0.9.9-SNAPSHOT`
 
 ## Purpose
 
@@ -69,6 +69,7 @@ IXIT-derived tables and columns prepare faster lookup, station grouping, reporti
 - `transfer_rules`
 - `transfer_edges`
 - `stop_footpaths`
+- `pathways`
 - `ixit_metadata`
 
 Derived data must remain explainable from the GTFS source data and the documented IXIT policies above.
@@ -87,10 +88,11 @@ Columns:
 Required keys:
 
 - `schema_version = 0.1`
-- `preprocessor_version = 0.9.8`
+- `preprocessor_version = 0.9.9-SNAPSHOT`
 - `generated_at`
 - `contract_name = IXIT_GTFS_SQLITE_CONTRACT`
-- `contract_version = 0.8`
+- `contract_version = 0.9`
+- `walk_model_version = 1`
 - `time_model = seconds_since_service_day_start`
 - `stop_id_policy = original_gtfs_stop_id`
 - `area_id_policy = parent_station_or_stop_id`
@@ -127,7 +129,9 @@ a zone identifier available from the IANA/TZDB data used by Java. The sentinel
 values `UNKNOWN` and `MULTIPLE` are diagnostics, not usable routing timezones.
 The v0.8.1 app-ready audit rejects invalid or unresolved trip-service zones.
 
-The isolated v0.8 Routing Contract Consumer PoC accepts contract `0.7` only.
+The isolated v0.8 Routing Contract Consumer PoC accepts the contract version
+compiled into this tool (currently `0.9`). This is not independent approval
+by the server consumer; see [CONSUMER_CONTRACT_09_GATE.md](CONSUMER_CONTRACT_09_GATE.md).
 It resolves user-facing `area_id` selections to concrete `stop_id` members and
 then validates trips through `trips`, ordered `stop_times`, and the combined
 service-day model. It does not change this SQLite contract or integrate it into
@@ -749,7 +753,8 @@ Indexes include area lookups plus `is_traversable`, `edge_kind`, `raw_transfer_i
 
 ### `stop_footpaths`
 
-Concrete directed footpath estimates between boarding stops in one StopArea.
+Concrete directed footpaths between boarding stops in one StopArea, using
+supplied station pathways or explicitly labelled geometry estimates.
 These rows preserve `stop_id` granularity; they do not collapse a station to an
 area-level zero-distance transfer.
 
@@ -767,15 +772,40 @@ Columns:
 - `time_model TEXT NOT NULL`
 - `source TEXT NOT NULL`
 - `explanation TEXT`
+- `walk_seconds INTEGER`: walking/traversal time, excluding the transfer buffer
+- `transfer_buffer_seconds INTEGER`: one buffer per complete transfer, currently 60
+- `gtfs_min_transfer_seconds INTEGER`: applicable unscoped GTFS minimum, or NULL
+- `pathway_ids TEXT NOT NULL`: ordered JSON array of source pathway IDs, or `[]`
+- `pathway_modes INTEGER NOT NULL`: bit mask; mode n sets bit n-1, zero for geometry
 - `UNIQUE (area_id, from_stop_id, to_stop_id)`
 
 Coordinate-based paths use a straight-line distance and the documented model
 `detour_1.35_speed_1.2mps_plus_60s_min_120s`. Estimates up to 400 meters may be
 marked traversable. Longer, missing-coordinate, or otherwise uncertain pairs
-remain `UNKNOWN` and non-traversable. GTFS `pathways.txt` would be a stronger
-source, but it is not synthesized when absent.
+remain `UNKNOWN` and non-traversable. In a station with supplied pathways,
+only a usable directed pathway chain permits walking; missing paths never
+fall back to geometry. Pathway length sums are tagged `GTFS_PATHWAY_LENGTH`;
+missing lengths remain NULL with `GTFS_PATHWAY_TIME_ONLY`. The 400 m limit
+applies only to geometry estimates.
+
+The minimum connection duration is `max(120, walk_seconds + 60,
+gtfs_min_transfer_seconds)`. An unscoped prohibition disables the generic
+walk. Route/trip/service-specific constraints must still be resolved by the
+consumer for the selected trips. See [WALK_TRANSFERS.md](WALK_TRANSFERS.md)
+for timing defaults, provenance, limitations, and consumer obligations.
 
 Indexes support area, source stop, target stop, traversability, and quality lookups.
+
+### `pathways`
+
+Imported GTFS fields: `pathway_id TEXT PRIMARY KEY`, `from_stop_id TEXT NOT NULL`,
+`to_stop_id TEXT NOT NULL`, `pathway_mode INTEGER`, `is_bidirectional INTEGER`,
+`length REAL`, `traversal_time INTEGER`, `stair_count INTEGER`.
+The index `idx_pathways_from_to` covers `(from_stop_id, to_stop_id)` in every
+output mode. This is the source subset used for walk preparation, not a lossless
+copy of every optional GTFS pathway field. Invalid structural/timing values
+are retained for inspection but excluded from the walk graph with a warning.
+Missing mandatory IDs, malformed numeric values and duplicate IDs fail import.
 
 ## Contract Validation
 
@@ -794,6 +824,8 @@ The preprocessor validates the SQLite file after writing it. Validation fails th
 - non-pedestrian or scoped GTFS transfers leaked into traversable edges
 - heuristic or area-membership candidates are traversable
 - implausible stop footpaths are marked traversable
+- walk components or pathway provenance disagree with the stored source graph
+- a traversable generic walk violates an unscoped prohibition or GTFS minimum
 
 Validation failures are contract breaks and should be treated as build or preprocessing failures.
 

@@ -10,10 +10,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /** Resolves feed-specific city abbreviations at the start of public stop names. */
 public final class CityPrefixAliasResolver {
     private static final int MIN_LEARNED_SUPPORT = 20;
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+    private static final Pattern NON_LETTERS = Pattern.compile("[^\\p{L}]");
     private static final double MIN_LEARNED_DOMINANCE = 0.98;
     private static final Set<String> MODE_CODES = Set.of("S", "U", "SU", "BUS", "TRAM");
     private static final Map<String, String> CURATED_CITY_BY_CODE = curatedCityCodes();
@@ -186,7 +189,7 @@ public final class CityPrefixAliasResolver {
         if (value == null) {
             return "";
         }
-        return value.replaceAll("[^\\p{L}]", "").toUpperCase(Locale.ROOT);
+        return NON_LETTERS.matcher(value).replaceAll("").toUpperCase(Locale.ROOT);
     }
 
     private static String cityKey(String value) {
@@ -194,7 +197,7 @@ public final class CityPrefixAliasResolver {
     }
 
     private static String clean(String value) {
-        return value == null ? "" : value.replaceAll("\\s+", " ").trim();
+        return value == null ? "" : WHITESPACE.matcher(value).replaceAll(" ").trim();
     }
 
     public record PrefixMatch(String stopName, String prefix, String source, boolean stripped) {

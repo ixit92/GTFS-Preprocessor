@@ -2,8 +2,12 @@ package de.ixit.gtfs;
 
 import java.text.Normalizer;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 public final class StopNameNormalizer {
+    private static final Pattern PUNCTUATION = Pattern.compile("[\\p{Punct}&&[^/]]+");
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+
     private StopNameNormalizer() {
     }
 
@@ -21,12 +25,8 @@ public final class StopNameNormalizer {
 
         normalized = normalized
                 .replace("&", " und ")
-                .replace("+", " und ")
-                .replaceAll("[\\p{Punct}&&[^/]]+", " ")
-                .replace("/", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-
-        return normalized;
+                .replace("+", " und ");
+        normalized = PUNCTUATION.matcher(normalized).replaceAll(" ").replace("/", " ");
+        return WHITESPACE.matcher(normalized).replaceAll(" ").trim();
     }
 }

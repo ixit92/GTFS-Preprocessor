@@ -5,7 +5,7 @@
 
     <groupId>de.ixit</groupId>
     <artifactId>gtfs-preprocessor</artifactId>
-    <version>0.9.8</version>
+    <version>0.9.9-SNAPSHOT</version>
     <name>IXIT GTFS Preprocessor</name>
     <description>Offline GTFS-to-SQLite preprocessor with an explicit IXIT data contract.</description>
     <url>https://github.com/ixit92/GTFS-Preprocessor</url>
@@ -154,9 +154,9 @@
                                         <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
                                         <Implementation-Title>${project.name}</Implementation-Title>
                                         <Implementation-Version>${project.version}</Implementation-Version>
-                                        <IXIT-Preprocessor-Version>0.9.8</IXIT-Preprocessor-Version>
+                                        <IXIT-Preprocessor-Version>${project.version}</IXIT-Preprocessor-Version>
                                         <IXIT-Schema-Version>0.1</IXIT-Schema-Version>
-                                        <IXIT-Contract-Version>0.8</IXIT-Contract-Version>
+                                        <IXIT-Contract-Version>0.9</IXIT-Contract-Version>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>

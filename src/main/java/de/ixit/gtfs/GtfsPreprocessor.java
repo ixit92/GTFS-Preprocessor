@@ -8,17 +8,15 @@ import de.ixit.gtfs.model.FeedInfo;
 import de.ixit.gtfs.model.HubProfile;
 import de.ixit.gtfs.model.Route;
 import de.ixit.gtfs.model.Agency;
-import de.ixit.gtfs.model.RouteAxis;
-import de.ixit.gtfs.model.RouteAxisStop;
 import de.ixit.gtfs.model.Stop;
 import de.ixit.gtfs.model.StopAreaAlias;
 import de.ixit.gtfs.model.StopArea;
 import de.ixit.gtfs.model.StopAreaCity;
 import de.ixit.gtfs.model.StopAreaProfile;
-import de.ixit.gtfs.model.StopSearchToken;
 import de.ixit.gtfs.model.TransferEdge;
 import de.ixit.gtfs.model.TransferRule;
 import de.ixit.gtfs.model.Trip;
+import de.ixit.gtfs.model.Pathway;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -133,8 +131,6 @@ public final class GtfsPreprocessor {
             int searchTokenCount = buildAndWriteSearchTokens(
                     performance,
                     writer,
-                    stops,
-                    stopAreas,
                     report,
                     warningSummary
             );
@@ -238,6 +234,14 @@ public final class GtfsPreprocessor {
                     writer::buildServiceCalendarSummary
             );
 
+            List<Pathway> pathways = gtfs.exists("pathways.txt")
+                    ? measureIo(performance, "parse_pathways_ms", () -> GtfsParsers.readPathways(gtfs.openRequired("pathways.txt")))
+                    : List.of();
+            measureSql(performance, "write_pathways_ms", () -> writer.writePathways(pathways));
+            if (!gtfs.exists("pathways.txt")) {
+                report.warning("Optional GTFS file missing: pathways.txt; station walks use explicitly labelled geometry estimates only.");
+            }
+
             if (effectiveOptions.skipDerivedBuilders()) {
                 importTransfersWithoutDerivedData(gtfs, writer, performance, report);
                 warningSummary.increment("derived_builders_skipped");
@@ -285,11 +289,10 @@ public final class GtfsPreprocessor {
                 if (effectiveOptions.buildRouteAxes()) {
                     measureSqlWithProgress(performance, "create_route_axis_source_indexes_ms", "route_axis_source_indexes", writer::createRouteAxisSourceIndexes);
 
-                    RouteAxisBuilder.RouteAxisBuildResult routeAxisResult = measureSqlWithProgress(performance, "build_route_axes_ms", "route_axis_sql_build", () -> routeAxisBuilder.buildFromDatabase(outputDatabase));
-                    List<RouteAxis> routeAxes = routeAxisResult.axes();
-                    List<RouteAxisStop> routeAxisStops = routeAxisResult.axisStops();
-                    measureSqlWithProgress(performance, "write_route_axes_ms", "route_axis_sql_write", () -> writer.writeRouteAxes(routeAxes, routeAxisStops));
-                    routeAxisStats = routeAxisResult.stats();
+                    routeAxisStats = measureSqlWithProgress(performance, "build_write_route_axes_ms", "route_axis_sql_build_write",
+                            () -> writer.writeRouteAxes(routeAxisBuilder,
+                                    heapGuardedProgressLogger("route_axis_scan", 500_000, derivedHeapGuardThresholdMb()),
+                                    heapGuardedProgressLogger("route_axis_write", 500_000, derivedHeapGuardThresholdMb())));
                     report.routeAxisStats(routeAxisStats);
                     addRouteAxisQualityWarnings(routeAxisStats, report, warningSummary);
                     performance.snapshotMemory("after_route_axes_mb");
@@ -306,6 +309,7 @@ public final class GtfsPreprocessor {
                         performance,
                         stops,
                         stopAreas,
+                        pathways,
                         report
                 );
                 transferRuleStats = transferResult.transferRuleStats();
@@ -548,7 +552,8 @@ public final class GtfsPreprocessor {
                 performance,
                 "build_display_name_quality_baseline_ms",
                 "display_name_quality_baseline_build",
-                () -> DisplayNameQualityBaselineBuilder.buildFromDatabase(outputDatabase)
+                () -> DisplayNameQualityBaselineBuilder.buildFromDatabase(outputDatabase,
+                        heapGuardedProgressLogger("display_name_quality", 100_000, derivedHeapGuardThresholdMb()))
         );
         measureSqlWithProgress(
                 performance,
@@ -564,6 +569,7 @@ public final class GtfsPreprocessor {
             PerformanceTracker performance,
             List<Stop> stops,
             List<StopArea> stopAreas,
+            List<Pathway> pathways,
             PreprocessReport.Builder report
     ) throws IOException, SQLException {
         TransferRuleBuilder transferRuleBuilder = new TransferRuleBuilder(stops);
@@ -595,18 +601,23 @@ public final class GtfsPreprocessor {
                 () -> writer.writeTransferRules(transferRules)
         );
 
-        TransferEdgeBuilder transferEdgeBuilder = new TransferEdgeBuilder(stops, stopAreas);
+        TransferEdgeBuilder transferEdgeBuilder = new TransferEdgeBuilder(stops, stopAreas, pathways);
         TransferEdgeBuilder.TransferEdgeStats transferEdgeStats = measureSqlWithProgress(
                 performance,
                 "build_write_transfer_edges_ms",
                 "transfer_edges_build_write",
                 () -> writer.writeTransferEdges(transferEdgeBuilder, transferRules)
         );
+        StopFootpathBuilder footpathBuilder = new StopFootpathBuilder(stops, pathways, transferRules);
+        if (footpathBuilder.unusablePathwayRows() > 0) {
+            report.warning("Unusable pathway rows: " + footpathBuilder.unusablePathwayRows()
+                    + "; missing/invalid timing, direction or station endpoints. Affected stations do not get geometry shortcuts.");
+        }
         StopFootpathBuilder.StopFootpathStats stopFootpathStats = measureSqlWithProgress(
                 performance,
                 "build_write_stop_footpaths_ms",
                 "stop_footpaths_build_write",
-                () -> writer.writeStopFootpaths(new StopFootpathBuilder(stops))
+                () -> writer.writeStopFootpaths(footpathBuilder)
         );
         return new TransferDerivedBuildResult(transferRuleResult.stats(), transferEdgeStats, stopFootpathStats);
     }
@@ -635,26 +646,18 @@ public final class GtfsPreprocessor {
     private static int buildAndWriteSearchTokens(
             PerformanceTracker performance,
             SqliteGtfsWriter writer,
-            List<Stop> stops,
-            List<StopArea> stopAreas,
             PreprocessReport.Builder report,
             WarningSummary warningSummary
     ) throws SQLException {
-        StopSearchTokenBuilder.StopSearchTokenBuildResult result = measureSql(
+        StopSearchTokenBuilder.StreamingStats result = measureSqlWithProgress(
                 performance,
-                "build_stop_search_tokens_ms",
-                () -> StopSearchTokenBuilder.build(stops, stopAreas)
-        );
-        List<StopSearchToken> tokens = result.tokens();
-        compactHeapAtPhaseBoundary(performance, "stop_search_token_build");
-        measureSqlWithProgress(
-                performance,
-                "write_stop_search_tokens_ms",
-                "stop_search_token_write",
-                () -> writer.writeStopSearchTokens(tokens)
+                "build_write_stop_search_tokens_ms",
+                "stop_search_token_build_write",
+                () -> writer.writeStopSearchTokens(heapGuardedProgressLogger(
+                        "stop_search_tokens", 100_000, derivedHeapGuardThresholdMb()))
         );
         addSearchTokenQualityWarnings(result, report, warningSummary);
-        return tokens.size();
+        return result.tokenCount();
     }
 
     private static void compactHeapAtPhaseBoundary(PerformanceTracker performance, String phase) {
@@ -733,8 +736,11 @@ public final class GtfsPreprocessor {
     }
 
     private static GtfsCsvReader.ProgressListener heapGuardedProgressLogger(String section, long logIntervalRows) {
+        return heapGuardedProgressLogger(section, logIntervalRows, streamingHeapGuardThresholdMb());
+    }
+
+    private static GtfsCsvReader.ProgressListener heapGuardedProgressLogger(String section, long logIntervalRows, long thresholdMb) {
         long started = System.nanoTime();
-        long thresholdMb = streamingHeapGuardThresholdMb();
         return rowsRead -> {
             if (rowsRead % STREAMING_HEAP_GUARD_INTERVAL_ROWS == 0) {
                 long beforeMb = PerformanceTracker.usedMemoryMb();
@@ -777,6 +783,11 @@ public final class GtfsPreprocessor {
         }
         long maximumHeapMb = Runtime.getRuntime().maxMemory() / (1024L * 1024L);
         return maximumHeapMb <= 2_700 ? 2_050 : 2_500;
+    }
+
+    private static long derivedHeapGuardThresholdMb() {
+        long maximumHeapMb = Runtime.getRuntime().maxMemory() / (1024L * 1024L);
+        return Math.max(1, Math.min(streamingHeapGuardThresholdMb(), Math.min(2_050, maximumHeapMb * 7 / 10)));
     }
 
     private static RealFeedValidationReport buildRealFeedValidation(
@@ -869,12 +880,12 @@ public final class GtfsPreprocessor {
         }
     }
 
-    private static void addSearchTokenQualityWarnings(StopSearchTokenBuilder.StopSearchTokenBuildResult result, PreprocessReport.Builder report, WarningSummary warningSummary) {
-        if (!result.emptyTokenSources().isEmpty()) {
+    private static void addSearchTokenQualityWarnings(StopSearchTokenBuilder.StreamingStats result, PreprocessReport.Builder report, WarningSummary warningSummary) {
+        if (result.emptyTokenSourceCount() > 0) {
             report.warning("Names producing empty Search Tokens: "
-                    + result.emptyTokenSources().size()
+                    + result.emptyTokenSourceCount()
                     + ", samples: "
-                    + result.emptyTokenSources().stream().limit(5).collect(Collectors.joining(", ")));
+                    + String.join(", ", result.emptyTokenSamples()));
         }
         if (result.duplicateTokenCount() > 0) {
             warningSummary.set("duplicate_tokens", result.duplicateTokenCount());
