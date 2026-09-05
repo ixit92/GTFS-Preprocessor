@@ -256,7 +256,7 @@ public final class SqliteContractValidator {
         return HubProfileBuilder.HubProfileStats.from(profiles);
     }
 
-    private static RouteAxisBuilder.RouteAxisStats readRouteAxisStats(Connection connection, Set<String> tables) throws SQLException {
+    static RouteAxisBuilder.RouteAxisStats readRouteAxisStats(Connection connection, Set<String> tables) throws SQLException {
         if (!tables.contains("route_axes") || !tables.contains("route_axis_stops")) {
             return null;
         }
@@ -295,18 +295,8 @@ public final class SqliteContractValidator {
             }
         }
 
-        List<de.ixit.gtfs.model.RouteAxisStop> axisStops = new ArrayList<>();
-        try (Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery("SELECT axis_id, sequence_index, area_id FROM route_axis_stops")) {
-            while (resultSet.next()) {
-                axisStops.add(new de.ixit.gtfs.model.RouteAxisStop(
-                        resultSet.getString("axis_id"),
-                        resultSet.getInt("sequence_index"),
-                        resultSet.getString("area_id")
-                ));
-            }
-        }
-        return RouteAxisBuilder.RouteAxisStats.from(axes, axisStops, Set.of(), 0, 0, 0, Set.of());
+        return RouteAxisBuilder.RouteAxisStats.from(axes, readCount(connection, "route_axis_stops"),
+                Set.of(), 0, 0, 0, Set.of());
     }
 
     private static TransferRuleBuilder.TransferRuleStats readTransferRuleStats(Connection connection, Set<String> tables) throws SQLException {
@@ -414,7 +404,8 @@ public final class SqliteContractValidator {
     private static int readCount(Connection connection, String table) throws SQLException {
         try (Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + table)) {
-            return resultSet.getInt(1);
+            resultSet.next();
+            return Math.toIntExact(resultSet.getLong(1));
         }
     }
 

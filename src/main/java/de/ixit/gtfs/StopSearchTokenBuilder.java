@@ -4,6 +4,9 @@ import de.ixit.gtfs.model.Stop;
 import de.ixit.gtfs.model.StopArea;
 import de.ixit.gtfs.model.StopSearchToken;
 
+import java.nio.file.Path;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -13,6 +16,54 @@ import java.util.Set;
 
 public final class StopSearchTokenBuilder {
     private StopSearchTokenBuilder() {
+    }
+
+    /** Reads committed, uniquely keyed source rows; deduplication only needs the current name. */
+    public static StreamingStats streamFromDatabase(Path database, TokenConsumer consumer,
+            GtfsCsvReader.ProgressListener progress) throws SQLException {
+        int tokenCount = 0;
+        int duplicateCount = 0;
+        int emptyCount = 0;
+        List<String> emptySamples = new ArrayList<>();
+        long rows = 0;
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database.toAbsolutePath());
+             var statement = connection.createStatement()) {
+            statement.execute("PRAGMA query_only=ON");
+            for (boolean areas : new boolean[]{false, true}) {
+                String query = areas
+                        ? "SELECT area_id, area_name, NULL FROM stop_areas ORDER BY rowid"
+                        : "SELECT stop_id, stop_name, parent_station FROM stops ORDER BY rowid";
+                try (var resultSet = statement.executeQuery(query)) {
+                    while (resultSet.next()) {
+                        String id = resultSet.getString(1);
+                        if (id == null) throw new SQLException("Search token source has a null ID");
+                        String parent = resultSet.getString(3);
+                        String areaId = parent == null || parent.isBlank() ? id : parent;
+                        TokenAccumulator accumulator = new TokenAccumulator();
+                        addNameTokens(accumulator, areas ? null : id, areaId, resultSet.getString(2),
+                                areas ? "AREA_NAME" : "STOP_NAME", areas ? "AREA_NAME" : "NAME");
+                        for (StopSearchToken token : accumulator.tokens) consumer.accept(token);
+                        tokenCount = Math.addExact(tokenCount, accumulator.tokens.size());
+                        duplicateCount = Math.addExact(duplicateCount, accumulator.duplicateTokenCount);
+                        emptyCount = Math.addExact(emptyCount, accumulator.emptyTokenSources.size());
+                        for (String source : accumulator.emptyTokenSources) {
+                            if (emptySamples.size() < 5) emptySamples.add(source);
+                        }
+                        if (progress != null) progress.onRowsRead(++rows);
+                    }
+                }
+            }
+        }
+        return new StreamingStats(tokenCount, duplicateCount, emptyCount, List.copyOf(emptySamples));
+    }
+
+    @FunctionalInterface
+    public interface TokenConsumer {
+        void accept(StopSearchToken token) throws SQLException;
+    }
+
+    public record StreamingStats(int tokenCount, int duplicateTokenCount,
+            int emptyTokenSourceCount, List<String> emptyTokenSamples) {
     }
 
     public static StopSearchTokenBuildResult build(List<Stop> stops, List<StopArea> stopAreas) {

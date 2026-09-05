@@ -22,6 +22,8 @@ public final class DisplayNameQualityBaselineBuilder {
     public static final String ACTION_PRESERVE = "PRESERVE";
 
     private static final Pattern LEADING_ACRONYM = Pattern.compile("^([\\p{Lu}]{2,5})[-.]+(.+)$");
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+    private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9]");
     private static final Set<String> MODE_CODES = Set.of("S", "U", "SU", "BUS", "TRAM");
     private static final Set<String> INSTITUTION_CODES = Set.of(
             "HEIG", "UNIL", "KIT", "HAWK", "TU", "DFB", "LWL", "LVR"
@@ -39,13 +41,23 @@ public final class DisplayNameQualityBaselineBuilder {
     }
 
     public static BuildResult buildFromDatabase(Path databasePath) throws SQLException {
+        return buildFromDatabase(databasePath, null);
+    }
+
+    public static BuildResult buildFromDatabase(Path databasePath,
+            GtfsCsvReader.ProgressListener progress) throws SQLException {
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + databasePath.toAbsolutePath())) {
-            return build(connection);
+            return build(connection, progress);
         }
     }
 
     static BuildResult build(Connection connection) throws SQLException {
+        return build(connection, null);
+    }
+
+    static BuildResult build(Connection connection, GtfsCsvReader.ProgressListener progress) throws SQLException {
         CityPrefixAliasResolver.Builder resolverBuilder = CityPrefixAliasResolver.builder();
+        long rows = 0;
         try (Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery("""
                      SELECT area.area_name, city.city_name
@@ -54,6 +66,7 @@ public final class DisplayNameQualityBaselineBuilder {
                      """)) {
             while (resultSet.next()) {
                 resolverBuilder.observe(resultSet.getString(1), resultSet.getString(2));
+                if (progress != null) progress.onRowsRead(++rows);
             }
         }
         CityPrefixAliasResolver resolver = resolverBuilder.build();
@@ -71,6 +84,7 @@ public final class DisplayNameQualityBaselineBuilder {
                      ORDER BY display.area_id
                      """)) {
             while (resultSet.next()) {
+                if (progress != null) progress.onRowsRead(++rows);
                 String areaId = clean(resultSet.getString("area_id"));
                 String stopName = clean(resultSet.getString("public_stop_name"));
                 String cityName = clean(resultSet.getString("public_city_name"));
@@ -200,8 +214,7 @@ public final class DisplayNameQualityBaselineBuilder {
     }
 
     private static boolean looksLikeCityCode(String code, String cityName) {
-        String city = StopNameNormalizer.normalize(cityName)
-                .replaceAll("[^a-z0-9]", "")
+        String city = NON_ALPHANUMERIC.matcher(StopNameNormalizer.normalize(cityName)).replaceAll("")
                 .toUpperCase(Locale.ROOT);
         if (code.length() < 2 || city.isBlank()) {
             return false;
@@ -223,7 +236,7 @@ public final class DisplayNameQualityBaselineBuilder {
     }
 
     private static String clean(String value) {
-        return value == null ? "" : value.replaceAll("\\s+", " ").trim();
+        return value == null ? "" : WHITESPACE.matcher(value).replaceAll(" ").trim();
     }
 
     public record BuildResult(

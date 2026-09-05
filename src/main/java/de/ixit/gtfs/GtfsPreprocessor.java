@@ -13,7 +13,6 @@ import de.ixit.gtfs.model.StopAreaAlias;
 import de.ixit.gtfs.model.StopArea;
 import de.ixit.gtfs.model.StopAreaCity;
 import de.ixit.gtfs.model.StopAreaProfile;
-import de.ixit.gtfs.model.StopSearchToken;
 import de.ixit.gtfs.model.TransferEdge;
 import de.ixit.gtfs.model.TransferRule;
 import de.ixit.gtfs.model.Trip;
@@ -132,8 +131,6 @@ public final class GtfsPreprocessor {
             int searchTokenCount = buildAndWriteSearchTokens(
                     performance,
                     writer,
-                    stops,
-                    stopAreas,
                     report,
                     warningSummary
             );
@@ -294,8 +291,8 @@ public final class GtfsPreprocessor {
 
                     routeAxisStats = measureSqlWithProgress(performance, "build_write_route_axes_ms", "route_axis_sql_build_write",
                             () -> writer.writeRouteAxes(routeAxisBuilder,
-                                    heapGuardedProgressLogger("route_axis_scan", 500_000, routeAxisHeapGuardThresholdMb()),
-                                    heapGuardedProgressLogger("route_axis_write", 500_000, routeAxisHeapGuardThresholdMb())));
+                                    heapGuardedProgressLogger("route_axis_scan", 500_000, derivedHeapGuardThresholdMb()),
+                                    heapGuardedProgressLogger("route_axis_write", 500_000, derivedHeapGuardThresholdMb())));
                     report.routeAxisStats(routeAxisStats);
                     addRouteAxisQualityWarnings(routeAxisStats, report, warningSummary);
                     performance.snapshotMemory("after_route_axes_mb");
@@ -555,7 +552,8 @@ public final class GtfsPreprocessor {
                 performance,
                 "build_display_name_quality_baseline_ms",
                 "display_name_quality_baseline_build",
-                () -> DisplayNameQualityBaselineBuilder.buildFromDatabase(outputDatabase)
+                () -> DisplayNameQualityBaselineBuilder.buildFromDatabase(outputDatabase,
+                        heapGuardedProgressLogger("display_name_quality", 100_000, derivedHeapGuardThresholdMb()))
         );
         measureSqlWithProgress(
                 performance,
@@ -648,26 +646,18 @@ public final class GtfsPreprocessor {
     private static int buildAndWriteSearchTokens(
             PerformanceTracker performance,
             SqliteGtfsWriter writer,
-            List<Stop> stops,
-            List<StopArea> stopAreas,
             PreprocessReport.Builder report,
             WarningSummary warningSummary
     ) throws SQLException {
-        StopSearchTokenBuilder.StopSearchTokenBuildResult result = measureSql(
+        StopSearchTokenBuilder.StreamingStats result = measureSqlWithProgress(
                 performance,
-                "build_stop_search_tokens_ms",
-                () -> StopSearchTokenBuilder.build(stops, stopAreas)
-        );
-        List<StopSearchToken> tokens = result.tokens();
-        compactHeapAtPhaseBoundary(performance, "stop_search_token_build");
-        measureSqlWithProgress(
-                performance,
-                "write_stop_search_tokens_ms",
-                "stop_search_token_write",
-                () -> writer.writeStopSearchTokens(tokens)
+                "build_write_stop_search_tokens_ms",
+                "stop_search_token_build_write",
+                () -> writer.writeStopSearchTokens(heapGuardedProgressLogger(
+                        "stop_search_tokens", 100_000, derivedHeapGuardThresholdMb()))
         );
         addSearchTokenQualityWarnings(result, report, warningSummary);
-        return tokens.size();
+        return result.tokenCount();
     }
 
     private static void compactHeapAtPhaseBoundary(PerformanceTracker performance, String phase) {
@@ -795,7 +785,7 @@ public final class GtfsPreprocessor {
         return maximumHeapMb <= 2_700 ? 2_050 : 2_500;
     }
 
-    private static long routeAxisHeapGuardThresholdMb() {
+    private static long derivedHeapGuardThresholdMb() {
         long maximumHeapMb = Runtime.getRuntime().maxMemory() / (1024L * 1024L);
         return Math.max(1, Math.min(streamingHeapGuardThresholdMb(), Math.min(2_050, maximumHeapMb * 7 / 10)));
     }
@@ -890,12 +880,12 @@ public final class GtfsPreprocessor {
         }
     }
 
-    private static void addSearchTokenQualityWarnings(StopSearchTokenBuilder.StopSearchTokenBuildResult result, PreprocessReport.Builder report, WarningSummary warningSummary) {
-        if (!result.emptyTokenSources().isEmpty()) {
+    private static void addSearchTokenQualityWarnings(StopSearchTokenBuilder.StreamingStats result, PreprocessReport.Builder report, WarningSummary warningSummary) {
+        if (result.emptyTokenSourceCount() > 0) {
             report.warning("Names producing empty Search Tokens: "
-                    + result.emptyTokenSources().size()
+                    + result.emptyTokenSourceCount()
                     + ", samples: "
-                    + result.emptyTokenSources().stream().limit(5).collect(Collectors.joining(", ")));
+                    + String.join(", ", result.emptyTokenSamples()));
         }
         if (result.duplicateTokenCount() > 0) {
             warningSummary.set("duplicate_tokens", result.duplicateTokenCount());

@@ -619,6 +619,36 @@ public final class SqliteGtfsWriter implements AutoCloseable {
         }
     }
 
+    public StopSearchTokenBuilder.StreamingStats writeStopSearchTokens(
+            GtfsCsvReader.ProgressListener progress) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO stop_search_tokens(stop_id, area_id, token, token_type, source)
+                VALUES (?, ?, ?, ?, ?)
+                """)) {
+            begin();
+            int[] batched = new int[1];
+            var stats = StopSearchTokenBuilder.streamFromDatabase(databasePath, token -> {
+                statement.setString(1, token.stopId());
+                statement.setString(2, token.areaId());
+                statement.setString(3, token.token());
+                statement.setString(4, token.tokenType());
+                statement.setString(5, token.source());
+                statement.addBatch();
+                batched[0] = executeBatchIfNeeded(statement, batched[0]);
+            }, progress);
+            statement.executeBatch();
+            commit();
+            return stats;
+        } catch (SQLException | RuntimeException failure) {
+            try {
+                connection.rollback();
+            } catch (SQLException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
+            throw failure;
+        }
+    }
+
     public void writeStopSearchTokens(List<StopSearchToken> tokens) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 INSERT INTO stop_search_tokens(stop_id, area_id, token, token_type, source)

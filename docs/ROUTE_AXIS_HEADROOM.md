@@ -17,16 +17,18 @@ and output-pipeline change, not a timetable, Walk-policy or schema change.
   small diagnostics/tests. Full builds use the streaming writer instead.
 - Scan/write progress uses the existing periodic heap guard. Its RouteAxis
   threshold is capped at 2050 MiB and 70 percent of maximum heap, or a lower
-  configured streaming threshold. Other phase defaults remain unchanged.
+  configured streaming threshold. The search/display follow-up uses the same
+  cap; other phase defaults remain unchanged.
 
 Exact sequence grouping, adjacent-area deduplication, route/direction/first
 trip ordering, representative trip selection, ID hash and ordinal generation,
 warnings and output columns remain unchanged. The aggregation still grows
 with distinct sequences; this is not a constant-memory algorithm. Very long
 individual trips or feeds with unusually many unique axes remain a risk.
-The later read-only contract-statistics collector still materializes its
-RouteAxis stop rows; this change does not claim to eliminate every allocation
-in the complete preprocessing/audit pipeline.
+The later read-only contract-statistics collector now counts RouteAxis stop
+rows with SQL instead of materializing them. It still retains the much smaller
+axis list. See [search/display follow-up](SEARCH_DISPLAY_HEADROOM.md) for the
+remaining pipeline limits.
 
 Progress sections are `route_axis_scan`, `route_axis_write` and
 `route_axis_sql_build_write`. The performance report uses
@@ -42,6 +44,8 @@ reporting only the post-GC live set. The guard is not a hard heap limit and
 Walk comparison. It reuses that run's unchanged copied/fused GTFS inputs and
 municipality data, and its successful Contract 0.9 candidate as the baseline.
 Only the newly hashed JAR, output paths and temporary directory change.
+For a subsequent completed headroom comparison, explicitly select
+`--baseline-kind headroom`; incomplete or failed runs are rejected.
 
 ```bash
 nice -n 10 ionice -c 2 -n 7 python3 -B scripts/run_route_axis_headroom_audit.py \
@@ -62,6 +66,8 @@ The JSON verdict is fail-closed during execution or on exceptions. It reports
 RouteAxis sampled peak against 2300 MiB, overall sampled peak against 90
 percent of 3 GiB, elapsed time and process RSS separately. Neither a data PASS
 nor a single low sample peak establishes three-run headroom or soak approval.
+`overall_2300_mib_target` reports the stricter global target separately from
+the 90-percent indicator. Per-phase samples include pre-collection values.
 No activation, service operation, feed download or artifact cleanup exists.
 
 Unit coverage includes ID/order stability, null versus empty directions,

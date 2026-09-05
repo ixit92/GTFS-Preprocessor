@@ -17,17 +17,41 @@ def read_json(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def completed_baseline(baseline, kind):
+    previous = read_json(baseline / "provenance.json")
+    if kind == "walk":
+        passed = previous.get("builds_pass") is True and read_json(baseline / "walk-comparison.json").get("pass") is True
+        execution = previous.get("executions", {}).get("candidate", {})
+        jar_hash = previous.get("jar_sha256", {}).get("candidate")
+    else:
+        report = read_json(baseline / "headroom-comparison.json")
+        execution = previous.get("execution", {})
+        passed = (report.get("pass") is True and report.get("status") == "PASS"
+                  and previous.get("inputs_unchanged_after_run") is True)
+        jar_hash = previous.get("candidate_jar_sha256")
+    if not passed or execution.get("exit_code") != 0 or not jar_hash:
+        raise ValueError("Baseline must be a completed passing isolated comparison")
+    return previous, execution["command"].copy(), jar_hash
+
+
 def memory_evidence(log):
     overall, route_axis, guards = [], [], []
+    phases = {"search_tokens": [], "display_quality": [], "contract_validation": []}
     with log.open(encoding="utf-8") as stream:
         for line in stream:
             values = [int(value) for value in re.findall(r"(?:memory_used_mb|before_mb)=(\d+)", line)]
             overall.extend(values)
+            for phase, markers in (("search_tokens", ("stop_search_token",)),
+                                   ("display_quality", ("display_name_quality",)),
+                                   ("contract_validation", ("section=contract_validation ",))):
+                if any(marker in line for marker in markers):
+                    phases[phase].extend(values)
             if "route_axis" in line or "phase=route_axes " in line:
                 route_axis.extend(values)
                 if "section=heap_guard " in line:
                     guards.append(line.strip())
     return {"max_sampled_heap_mib": max(overall) if overall else None,
+            "phase_max_sampled_heap_mib": {phase: max(values) if values else None for phase, values in phases.items()},
             "route_axis_max_sampled_heap_mib": max(route_axis) if route_axis else None,
             "route_axis_gc_guards": len(guards), "guard_samples": guards[:3]}
 
@@ -85,6 +109,7 @@ def compare_databases(baseline, run, provenance):
     overall = result["performance"]["candidate"]["max_sampled_heap_mib"]
     result["route_axis_headroom_status"] = "SAMPLED_BELOW_2300_MIB" if peak is not None and peak < 2300 else "REVIEW_REQUIRED"
     result["overall_headroom_status"] = "SAMPLED_BELOW_90_PERCENT" if overall is not None and overall < 3072 * 0.9 else "REVIEW_REQUIRED"
+    result["overall_2300_mib_target"] = "SAMPLED_BELOW_2300_MIB" if overall is not None and overall < 2300 else "NOT_DEMONSTRATED"
     result["note"] = "One full run; sampled heap is not an exact live-set peak or a repeat-run approval."
     result["pass"] = all(checks.values())
     result["failed_checks"] = [key for key, value in checks.items() if not value]
@@ -97,6 +122,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tool-root", type=Path, required=True)
     parser.add_argument("--baseline-run", type=Path, required=True)
+    parser.add_argument("--baseline-kind", choices=("walk", "headroom"), default="walk")
     parser.add_argument("--candidate-jar", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
     args = parser.parse_args()
@@ -110,10 +136,10 @@ def main():
     run = inside(root, root / "build" / args.run_id)
     if run.exists() or shutil.disk_usage(root).free < 40 * 1024**3:
         parser.error("Fresh run directory and 40 GiB free space required")
-    previous = read_json(baseline / "provenance.json")
-    if previous.get("builds_pass") is not True or read_json(baseline / "walk-comparison.json").get("pass") is not True:
-        parser.error("Baseline must be a completed passing isolated Walk comparison")
-    command = previous["executions"]["candidate"]["command"].copy()
+    try:
+        previous, command, baseline_jar_hash = completed_baseline(baseline, args.baseline_kind)
+    except (ValueError, KeyError, OSError) as exc:
+        parser.error(str(exc))
     fused = inside(root, Path(command[command.index("--input") + 1]))
     geo = inside(root, Path(command[command.index("--municipalities-geojson") + 1]))
     if sha256(fused) != previous["fused_sha256"] or sha256(geo) != previous["municipalities_sha256"]:
@@ -130,7 +156,7 @@ def main():
     command[command.index("--output") + 1] = str(run / "candidate.sqlite")
     command[command.index("--report-output") + 1] = str(run / "candidate-contract.json")
     provenance = {"baseline_run": str(baseline), "candidate_jar_sha256": sha256(jar),
-                  "baseline_jar_sha256": previous["jar_sha256"]["candidate"],
+                  "baseline_jar_sha256": baseline_jar_hash, "baseline_kind": args.baseline_kind,
                   "fused_sha256": previous["fused_sha256"], "municipalities_sha256": previous["municipalities_sha256"],
                   "input_provenance": previous["input_provenance"], "sources": previous["sources"],
                   "heap": "3g", "activation_allowed": False, "cleanup_performed": False}

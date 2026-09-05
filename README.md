@@ -171,6 +171,9 @@ For an isolated baseline/candidate comparison, see
 RouteAxis allocation hardening and its isolated comparison are described in
 [docs/ROUTE_AXIS_HEADROOM.md](docs/ROUTE_AXIS_HEADROOM.md); downstream acceptance
 remains a [separate Contract 0.9 gate](docs/CONSUMER_CONTRACT_09_GATE.md).
+The subsequent [search/display headroom work](docs/SEARCH_DISPLAY_HEADROOM.md)
+streams search tokens and reduces display/statistics allocations without
+changing names, routing evidence or the data contract.
 
 ## Data and Privacy
 
