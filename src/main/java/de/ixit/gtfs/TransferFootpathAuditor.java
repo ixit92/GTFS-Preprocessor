@@ -12,7 +12,23 @@ import java.util.List;
 import java.util.Map;
 
 public final class TransferFootpathAuditor {
-    public static final String AUDIT_VERSION = "0.1";
+    public static final String AUDIT_VERSION = "0.2";
+    // The NULL trip-scope bucket can contain most feed rows; probe concrete stop pairs instead.
+    static final String PROHIBITED_WALKS_QUERY = """
+            SELECT COUNT(*) FROM stop_footpaths path
+            JOIN stops origin ON origin.stop_id=path.from_stop_id
+            JOIN stops destination ON destination.stop_id=path.to_stop_id
+            WHERE path.is_traversable=1 AND EXISTS (
+                SELECT 1 FROM transfers raw INDEXED BY idx_transfers_from_to
+                WHERE raw.from_stop_id IN (origin.stop_id, origin.parent_station)
+                  AND raw.to_stop_id IN (destination.stop_id, destination.parent_station)
+                  AND raw.from_route_id IS NULL AND raw.to_route_id IS NULL
+                  AND raw.from_trip_id IS NULL AND raw.to_trip_id IS NULL AND raw.service_id IS NULL
+                  AND (raw.transfer_type=3 OR raw.transfer_type=2 AND raw.min_transfer_time IS NULL
+                       OR raw.transfer_type IN (0,1,2) AND raw.min_transfer_time < 0
+                       OR raw.transfer_type IN (0,1,2) AND raw.min_transfer_time > path.min_transfer_seconds)
+            )
+            """;
 
     private TransferFootpathAuditor() {
     }
@@ -69,7 +85,7 @@ public final class TransferFootpathAuditor {
         long unknownStopFootpaths = count(connection, "SELECT COUNT(*) FROM stop_footpaths WHERE is_traversable=0");
         long overDistanceTraversable = count(connection, """
                 SELECT COUNT(*) FROM stop_footpaths
-                WHERE is_traversable=1 AND distance_meters > 400
+                WHERE is_traversable=1 AND source='SAME_STOP_AREA_GEOMETRY' AND distance_meters > 400
                 """);
         long zeroTimeTraversable = count(connection, """
                 SELECT COUNT(*) FROM stop_footpaths
@@ -103,6 +119,28 @@ public final class TransferFootpathAuditor {
                 """);
         Integer maximumDistance = nullableInteger(connection, "SELECT MAX(distance_meters) FROM stop_footpaths");
         List<String> samples = samples(connection);
+        long rawPathways = count(connection, "SELECT COUNT(*) FROM pathways");
+        long pathwayFootpaths = count(connection, "SELECT COUNT(*) FROM stop_footpaths WHERE source='GTFS_PATHWAYS' AND is_traversable=1");
+        long estimatedFootpaths = count(connection, "SELECT COUNT(*) FROM stop_footpaths WHERE source='SAME_STOP_AREA_GEOMETRY' AND is_traversable=1");
+        long invalidWalkComponents = count(connection, """
+                SELECT COUNT(*) FROM stop_footpaths path
+                WHERE is_traversable=1 AND (
+                    walk_seconds IS NULL OR walk_seconds < 0
+                    OR transfer_buffer_seconds IS NULL OR transfer_buffer_seconds <> 60
+                    OR min_transfer_seconds IS NULL
+                    OR min_transfer_seconds < MAX(120, walk_seconds + transfer_buffer_seconds, COALESCE(gtfs_min_transfer_seconds, 0))
+                    OR gtfs_min_transfer_seconds < 0
+                    OR (source='SAME_STOP_AREA_GEOMETRY' AND (distance_meters IS NULL OR distance_meters < 0))
+                    OR (source='GTFS_PATHWAYS' AND (NOT json_valid(pathway_ids)
+                        OR json_array_length(pathway_ids)=0 OR pathway_modes < 1 OR pathway_modes > 127))
+                    OR (source='GTFS_PATHWAYS' AND EXISTS (
+                        SELECT 1 FROM json_each(path.pathway_ids) step
+                        LEFT JOIN pathways raw ON raw.pathway_id=step.value WHERE raw.pathway_id IS NULL))
+                    OR source NOT IN ('GTFS_PATHWAYS', 'SAME_STOP_AREA_GEOMETRY')
+                )
+                """);
+        invalidWalkComponents += PathwayProvenanceValidator.countInvalid(connection);
+        long prohibitedWalks = count(connection, PROHIBITED_WALKS_QUERY);
 
         boolean pass = nonPedestrianGtfsEdges == 0
                 && scopedGtfsEdges == 0
@@ -110,6 +148,8 @@ public final class TransferFootpathAuditor {
                 && traversableAreaMembershipEdges == 0
                 && overDistanceTraversable == 0
                 && zeroTimeTraversable == 0
+                && invalidWalkComponents == 0
+                && prohibitedWalks == 0
                 && (!available || areasWithoutFootpaths == 0);
         return new TransferFootpathAuditReport(
                 AUDIT_VERSION,
@@ -134,7 +174,12 @@ public final class TransferFootpathAuditor {
                 oversizedAreas,
                 extremeAreas,
                 maximumDistance,
-                List.copyOf(samples)
+                List.copyOf(samples),
+                rawPathways,
+                pathwayFootpaths,
+                estimatedFootpaths,
+                invalidWalkComponents,
+                prohibitedWalks
         );
     }
 

@@ -342,6 +342,11 @@ public final class SqliteContractJsonWriter {
             json.append("    \"stop_footpaths\": ").append(audit.stopFootpaths()).append(",\n");
             json.append("    \"traversable_stop_footpaths\": ").append(audit.traversableStopFootpaths()).append(",\n");
             json.append("    \"unknown_stop_footpaths\": ").append(audit.unknownStopFootpaths()).append(",\n");
+            json.append("    \"raw_pathways\": ").append(audit.rawPathways()).append(",\n");
+            json.append("    \"pathway_footpaths\": ").append(audit.pathwayFootpaths()).append(",\n");
+            json.append("    \"geometry_estimates\": ").append(audit.estimatedFootpaths()).append(",\n");
+            json.append("    \"invalid_walk_components\": ").append(audit.invalidWalkComponents()).append(",\n");
+            json.append("    \"prohibited_walks\": ").append(audit.prohibitedWalks()).append(",\n");
             json.append("    \"over_distance_traversable_footpaths\": ").append(audit.overDistanceTraversableFootpaths()).append(",\n");
             json.append("    \"zero_time_traversable_footpaths\": ").append(audit.zeroTimeTraversableFootpaths()).append(",\n");
             json.append("    \"multi_stop_areas\": ").append(audit.multiStopAreas()).append(",\n");

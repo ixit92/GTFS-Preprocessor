@@ -26,6 +26,11 @@ public record TransferFootpathAuditReport(
         long oversizedStopAreas,
         long extremeStopAreas,
         Integer maximumFootpathDistanceMeters,
-        List<String> samples
+        List<String> samples,
+        long rawPathways,
+        long pathwayFootpaths,
+        long estimatedFootpaths,
+        long invalidWalkComponents,
+        long prohibitedWalks
 ) {
 }

@@ -5,17 +5,19 @@ import java.util.Map;
 
 public final class SqliteContract {
     public static final String SCHEMA_VERSION = "0.1";
-    public static final String PREPROCESSOR_VERSION = "0.9.8";
+    public static final String PREPROCESSOR_VERSION = "0.9.9-SNAPSHOT";
     public static final String CONTRACT_NAME = "IXIT_GTFS_SQLITE_CONTRACT";
     public static final String LEGACY_CONTRACT_VERSION = "0.5";
     public static final String COMPATIBILITY_CONTRACT_VERSION = "0.6";
     public static final String DISPLAY_CONTRACT_VERSION = "0.7";
-    public static final String CONTRACT_VERSION = "0.8";
-    public static final String APP_RUNTIME_CONTRACT_VERSION = "0.8";
+    public static final String TRANSFER_CONTRACT_VERSION = "0.8";
+    public static final String CONTRACT_VERSION = "0.9";
+    public static final String APP_RUNTIME_CONTRACT_VERSION = "0.9";
     public static final List<String> SUPPORTED_CONTRACT_VERSIONS = List.of(
             LEGACY_CONTRACT_VERSION,
             COMPATIBILITY_CONTRACT_VERSION,
             DISPLAY_CONTRACT_VERSION,
+            TRANSFER_CONTRACT_VERSION,
             CONTRACT_VERSION
     );
     public static final String TIME_MODEL = "seconds_since_service_day_start";
@@ -28,7 +30,8 @@ public final class SqliteContract {
     public static final String SERVICE_DAY_TIMEZONE_POLICY = "gtfs_service_date_in_agency_timezone";
     public static final String SERVICE_DAY_TIME_OVERFLOW_POLICY = "preserve_seconds_since_service_day_start";
     public static final String TRANSFER_SEMANTICS_POLICY = "preserve_gtfs_scope_and_separate_non_walking";
-    public static final String FOOTPATH_POLICY = "concrete_stop_estimates_never_area_membership_as_zero_distance";
+    public static final String FOOTPATH_POLICY = "directed_pathways_before_estimates_walk_plus_buffer_gtfs_lower_bound";
+    public static final String WALK_MODEL_VERSION = "1";
 
     public static final List<String> EXPECTED_TABLES = List.of(
             "stops",
@@ -48,6 +51,7 @@ public final class SqliteContract {
             "route_axis_stops",
             "transfer_rules",
             "stop_footpaths",
+            "pathways",
             "ixit_metadata"
     );
 
@@ -67,6 +71,7 @@ public final class SqliteContract {
     );
 
     public static final List<String> EXPECTED_INDEXES = List.of(
+            "idx_pathways_from_to",
             "idx_stops_parent_station",
             "idx_stop_area_members_area_id",
             "idx_stop_area_members_stop_id",
@@ -163,6 +168,7 @@ public final class SqliteContract {
     );
 
     public static final List<String> APP_RUNTIME_EXPECTED_INDEXES = List.of(
+            "idx_pathways_from_to",
             "idx_stops_parent_station",
             "idx_stop_area_members_area_id",
             "idx_stop_area_members_stop_id",
@@ -295,8 +301,11 @@ public final class SqliteContract {
             )),
             Map.entry("stop_footpaths", List.of(
                     "footpath_id", "area_id", "from_stop_id", "to_stop_id", "distance_meters",
-                    "min_transfer_seconds", "is_traversable", "quality", "distance_model", "time_model", "source"
-            ))
+                    "min_transfer_seconds", "is_traversable", "quality", "distance_model", "time_model", "source",
+                    "walk_seconds", "transfer_buffer_seconds", "gtfs_min_transfer_seconds", "pathway_ids", "pathway_modes"
+            )),
+            Map.entry("pathways", List.of("pathway_id", "from_stop_id", "to_stop_id", "pathway_mode",
+                    "is_bidirectional", "length", "traversal_time", "stair_count"))
     );
 
     private SqliteContract() {

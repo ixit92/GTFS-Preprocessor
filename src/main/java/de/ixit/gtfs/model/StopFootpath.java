@@ -12,6 +12,11 @@ public record StopFootpath(
         String distanceModel,
         String timeModel,
         String source,
-        String explanation
+        String explanation,
+        Integer walkSeconds,
+        Integer transferBufferSeconds,
+        Integer gtfsMinTransferSeconds,
+        java.util.List<String> pathwayIds,
+        int pathwayModes
 ) {
 }

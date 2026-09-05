@@ -4,6 +4,7 @@ import de.ixit.gtfs.model.Stop;
 import de.ixit.gtfs.model.StopArea;
 import de.ixit.gtfs.model.TransferEdge;
 import de.ixit.gtfs.model.TransferRule;
+import de.ixit.gtfs.model.Pathway;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,8 +27,17 @@ public final class TransferEdgeBuilder {
     private final Map<String, Stop> stopById = new HashMap<>();
     private final Map<String, StopArea> areaById = new HashMap<>();
     private final Map<String, List<Stop>> boardingStopsByArea = new HashMap<>();
+    private final StationPathwayGraph pathways;
+    private StopTransferConstraints constraints;
+    private String pathSource;
+    private StationPathwayGraph.Paths sourcePaths;
 
     public TransferEdgeBuilder(List<Stop> stops, List<StopArea> stopAreas) {
+        this(stops, stopAreas, List.of());
+    }
+
+    public TransferEdgeBuilder(List<Stop> stops, List<StopArea> stopAreas, List<Pathway> paths) {
+        pathways = new StationPathwayGraph(stops, paths);
         for (Stop stop : stops) {
             stopById.put(stop.stopId(), stop);
             if (stop.locationType() == null || stop.locationType() == 0) {
@@ -49,6 +59,7 @@ public final class TransferEdgeBuilder {
     }
 
     public TransferEdgeStats writeTo(List<TransferRule> transferRules, Consumer<TransferEdge> consumer) {
+        constraints = new StopTransferConstraints(new ArrayList<>(stopById.values()), transferRules);
         TransferEdgeStatsAccumulator stats = new TransferEdgeStatsAccumulator();
         Set<AreaPair> explicitPedestrianPairs = new HashSet<>();
         Set<AreaPair> prohibitedStopPairs = new HashSet<>();
@@ -97,14 +108,33 @@ public final class TransferEdgeBuilder {
         stopById.clear();
         areaById.clear();
         boardingStopsByArea.clear();
+        pathways.clear();
+        sourcePaths = null;
+        constraints = null;
         System.gc();
         return result;
     }
 
     private TransferEdge gtfsPedestrianEdge(TransferRule rule) {
-        int seconds = gtfsTransferSeconds(rule);
-        int minutes = (seconds + 59) / 60;
+        StopTransferConstraints.Constraint constraint = constraints.between(rule.fromStopId(), rule.toStopId());
         Integer distance = distanceBetweenStops(rule.fromStopId(), rule.toStopId());
+        boolean covered = rule.fromAreaId().equals(rule.toAreaId()) && pathways.covers(rule.fromAreaId());
+        StationPathwayGraph.Evidence evidence = null;
+        if (covered && !rule.fromStopId().equals(rule.toStopId())) {
+            if (!rule.fromStopId().equals(pathSource)) {
+                pathSource = rule.fromStopId();
+                sourcePaths = pathways.pathsFrom(pathSource);
+            }
+            evidence = sourcePaths.to(rule.toStopId());
+        }
+        boolean traversable = !constraint.blocked()
+                && (!covered || evidence != null || rule.fromStopId().equals(rule.toStopId()));
+        Integer minimum = constraint.minimumSeconds();
+        int seconds = evidence != null ? WalkTimeModel.minimumTransferSeconds(evidence.walkSeconds(), minimum)
+                : distance != null ? WalkTimeModel.minimumTransferSeconds(WalkTimeModel.estimatedWalkSeconds(distance), minimum)
+                : Math.max(DEFAULT_TRANSFER_SECONDS, minimum == null ? 0 : minimum);
+        int minutes = (int) (((long) seconds + 59) / 60);
+        if (evidence != null) distance = evidence.lengthMeters();
         return new TransferEdge(
                 "edge_gtfs_" + rule.rawTransferId(),
                 rule.rawTransferId(),
@@ -115,14 +145,15 @@ public final class TransferEdgeBuilder {
                 distance,
                 seconds,
                 minutes,
-                true,
+                traversable,
                 "GTFS_PEDESTRIAN_TRANSFER",
                 rule.transferSemantic(),
                 rule.scopeType(),
-                distance == null ? "GTFS_TIME_ONLY" : "GTFS_TIME_WITH_STOP_COORDINATE_DISTANCE",
-                qualityForSeconds(seconds),
+                evidence != null ? distance == null ? "GTFS_PATHWAY_TIME_ONLY" : "GTFS_PATHWAY_LENGTH"
+                        : distance == null ? "GTFS_TIME_ONLY" : "GTFS_TIME_WITH_STOP_COORDINATE_DISTANCE",
+                traversable ? qualityForSeconds(seconds) : "BLOCKED",
                 "GTFS_TRANSFERS",
-                "Unscoped GTFS pedestrian transfer; exact stop IDs and raw transfer row are preserved."
+                "GTFS minimum is a lower bound on walking plus one buffer; scoped rules still require consumer validation."
         );
     }
 
@@ -251,16 +282,8 @@ public final class TransferEdgeBuilder {
         return distanceMeters(from.stopLat(), from.stopLon(), to.stopLat(), to.stopLon());
     }
 
-    private static int gtfsTransferSeconds(TransferRule rule) {
-        if (rule.minTransferTimeSeconds() != null && rule.minTransferTimeSeconds() >= 0) {
-            return rule.minTransferTimeSeconds();
-        }
-        return DEFAULT_TRANSFER_SECONDS;
-    }
-
     private static int estimatedWalkingSeconds(int distanceMeters) {
-        int estimate = (int) Math.ceil(distanceMeters * 1.35 / 1.2) + 60;
-        return Math.max(120, estimate);
+        return WalkTimeModel.minimumTransferSeconds(WalkTimeModel.estimatedWalkSeconds(distanceMeters), null);
     }
 
     private static String qualityForSeconds(int seconds) {

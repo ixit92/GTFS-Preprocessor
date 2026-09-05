@@ -7,6 +7,7 @@ import de.ixit.gtfs.model.FeedInfo;
 import de.ixit.gtfs.model.Route;
 import de.ixit.gtfs.model.Stop;
 import de.ixit.gtfs.model.Trip;
+import de.ixit.gtfs.model.Pathway;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,6 +56,16 @@ public final class GtfsParsers {
                 row.optional("route_text_color")
         )));
         return routes;
+    }
+
+    public static List<Pathway> readPathways(InputStream inputStream) throws IOException {
+        List<Pathway> pathways = new ArrayList<>();
+        GtfsCsvReader.read(inputStream, row -> pathways.add(new Pathway(
+                row.required("pathway_id"), row.required("from_stop_id"), row.required("to_stop_id"),
+                row.optionalInt("pathway_mode"), row.optionalInt("is_bidirectional"),
+                row.optionalDouble("length"), row.optionalInt("traversal_time"), row.optionalInt("stair_count")
+        )));
+        return pathways;
     }
 
     public static List<Trip> readTrips(InputStream inputStream) throws IOException {

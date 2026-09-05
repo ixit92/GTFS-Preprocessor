@@ -51,6 +51,7 @@ public final class SqliteContractValidator {
                 requireMetadata(metadata, "service_day_time_overflow_policy", SqliteContract.SERVICE_DAY_TIME_OVERFLOW_POLICY, errors);
                 requireMetadata(metadata, "transfer_semantics_policy", SqliteContract.TRANSFER_SEMANTICS_POLICY, errors);
                 requireMetadata(metadata, "footpath_policy", SqliteContract.FOOTPATH_POLICY, errors);
+                requireMetadata(metadata, "walk_model_version", SqliteContract.WALK_MODEL_VERSION, errors);
                 requireMetadataPresent(metadata, "feed_timezones", errors);
                 requireMetadata(metadata, "build_identity_version", BuildIdentity.IDENTITY_VERSION, errors);
                 requireSha256Metadata(metadata, "build_identity_sha256", errors);
@@ -115,7 +116,9 @@ public final class SqliteContractValidator {
                             + ", traversable_area_membership=" + transferAudit.traversableAreaMembershipEdges()
                             + ", over_distance_footpaths=" + transferAudit.overDistanceTraversableFootpaths()
                             + ", zero_time_footpaths=" + transferAudit.zeroTimeTraversableFootpaths()
-                            + ", areas_without_footpaths=" + transferAudit.areasWithoutFootpathRows());
+                            + ", areas_without_footpaths=" + transferAudit.areasWithoutFootpathRows()
+                            + ", invalid_walk_components=" + transferAudit.invalidWalkComponents()
+                            + ", prohibited_walks=" + transferAudit.prohibitedWalks());
                 }
             }
 
